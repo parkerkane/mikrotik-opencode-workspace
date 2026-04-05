@@ -252,6 +252,10 @@ Suggested inputs:
 - `include_sensitive`: optional flag for whether export should include sensitive values if supported by the chosen export mode
 - `local_dir`: optional local target directory, default `backups/`
 
+Not recommended for this tool:
+
+- `jq_filter`: this tool's primary output is file creation and file download, not a large JSON payload. If filtering is needed, it makes more sense on generic data-returning tools such as `resource_print`, not on the backup collection workflow.
+
 Suggested generated filenames:
 
 - router binary backup: `backups/<prefix>-<timestamp>.backup`
@@ -357,6 +361,36 @@ Each tool follows this MCP tool definition shape:
   }
 }
 ```
+
+## Cross-Cutting Output Options
+
+It can make sense to support a common optional `jq_filter` parameter on data-returning tools, but not on every tool.
+
+Good candidates:
+
+- list tools such as `interface_list`, `ip_route_list`, `dhcp_lease_list`
+- get/query tools such as `resource_print`
+- diagnostics that return structured arrays or objects
+
+Poor candidates:
+
+- mutating tools whose main value is the side effect, such as `system_reboot`
+- composite workflow tools whose main value is created artifacts, such as `system_backup_collect`
+- streaming or listen-style tools
+
+Recommended behavior:
+
+- apply `jq_filter` only after the raw RouterOS reply has already been normalized into JSON
+- keep the raw tool behavior as the default when `jq_filter` is omitted
+- if the filter fails to parse or evaluate, return a clear MCP error instead of partial output
+- document whether the filter is applied to an array payload, an object payload, or a wrapped response object
+
+Recommended scope for the first implementation:
+
+- support `jq_filter` on `resource_print`
+- optionally add it to other high-volume read tools later if it proves useful
+
+This keeps the feature useful without forcing every tool to carry extra output-shaping complexity.
 
 ## Error Handling
 

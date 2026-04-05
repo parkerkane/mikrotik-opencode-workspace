@@ -49,6 +49,7 @@ In tool tests, mock the RouterOS client methods instead of doing real network I/
 - request-to-client mapping
 - response shaping
 - surfaced error messages
+- optional filtered-output behavior where supported
 
 ## Suggested Test Levels
 
@@ -109,6 +110,8 @@ test = [
 - `system_reboot` sends `/system/reboot`
 - `system_backup_collect` creates both router-side files before starting downloads
 - `system_backup_collect` stores both files under local `backups/`
+- `resource_print` applies `jq_filter` only after JSON normalization
+- invalid `jq_filter` input returns a clear error
 - login failure surfaces a credential-specific error
 - TLS failures mention `MIKROTIK_TLS_VERIFY=false`
 - `!trap` and timeout errors return actionable messages instead of raw tracebacks
