@@ -1,6 +1,10 @@
 # MikroTik Manager
 
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+
 MikroTik Manager is an OpenCode workspace for managing MikroTik routers through a local MCP server.
+
+Licensed under the Apache License, Version 2.0. See `LICENSE`.
 
 Current status: Phases 1-5 are implemented in `tools/mikrotik-mcp/`.
 
@@ -52,6 +56,8 @@ Create or activate a Python environment, then install dependencies from the repo
 ```bash
 pip install -r requirements.txt
 ```
+
+Packaging metadata for publishing is defined in `tools/mikrotik-mcp/pyproject.toml` and uses the Apache-2.0 license.
 
 ## Run The MCP Server
 

@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mikrotik-mcp"
+version = "0.1.0"
+description = "MCP server for managing MikroTik routers through the RouterOS API"
+readme = { file = "../../README.md", content-type = "text/markdown" }
+requires-python = ">=3.11"
+license = "Apache-2.0"
+authors = [{ name = "MikroTik Manager contributors" }]
+dependencies = [
+    "jq>=1,<2",
+    "mcp>=1,<2",
+    "python-dotenv>=1,<2",
+]
+keywords = ["mikrotik", "routeros", "mcp"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Internet",
+    "Topic :: System :: Networking",
+]
+
+[project.scripts]
+mikrotik-mcp = "mikrotik_mcp.server:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+license-files = ["../../LICENSE", "../../NOTICE"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
