@@ -63,6 +63,27 @@ def _require_exactly_one_locator(entity_name: str, **locators: str | None) -> tu
     return selected[0]
 
 
+def _normalize_generated_name(name: str, *, extension: str, field_name: str = "name") -> str:
+    value = name.strip()
+    if not value:
+        raise ValueError(f"{field_name} is required")
+    if value.endswith("/"):
+        raise ValueError(f"{field_name} must not end with '/'")
+    if value.lower().endswith(extension.lower()):
+        value = value[: -len(extension)]
+    if not value:
+        raise ValueError(f"{field_name} is required")
+    return value
+
+
+def _file_exists_in_directory(file_name: str, directory: str) -> bool:
+    normalized_directory = directory.strip().strip("/")
+    if not normalized_directory:
+        return True
+    normalized_name = file_name.strip().strip("/")
+    return normalized_name == normalized_directory or normalized_name.startswith(f"{normalized_directory}/")
+
+
 def resource_print_impl(
     client: RouterOSClient,
     *,
@@ -246,6 +267,65 @@ def dns_set_impl(
     return client.run("/ip/dns/set", attrs=attributes)
 
 
+def file_list_impl(
+    client: RouterOSClient,
+    *,
+    directory: str | None = None,
+    name: str | None = None,
+    file_type: str | None = None,
+) -> list[dict[str, str]]:
+    queries = _build_equality_queries(name=name, type=file_type)
+    items = _print_records(client, menu="/file", queries=queries or None)
+    if name is not None:
+        items = [item for item in items if item.get("name") == name]
+    if file_type is not None:
+        items = [item for item in items if item.get("type") == file_type]
+    if directory is None:
+        return items
+
+    normalized_directory = directory.strip()
+    if not normalized_directory:
+        raise ValueError("directory must not be empty")
+    return [item for item in items if _file_exists_in_directory(item.get("name", ""), normalized_directory)]
+
+
+def system_backup_save_impl(
+    client: RouterOSClient,
+    *,
+    name: str,
+) -> dict[str, str | bool]:
+    normalized_name = _normalize_generated_name(name, extension=".backup")
+    client.run("/system/backup/save", attrs={"name": normalized_name})
+    return {
+        "success": True,
+        "name": normalized_name,
+        "path": f"{normalized_name}.backup",
+    }
+
+
+def system_export_impl(
+    client: RouterOSClient,
+    *,
+    name: str,
+    include_sensitive: bool = False,
+    compact: bool = False,
+) -> dict[str, str | bool]:
+    normalized_name = _normalize_generated_name(name, extension=".rsc")
+    attributes: dict[str, Any] = {"file": normalized_name}
+    if include_sensitive:
+        attributes["show-sensitive"] = ""
+    if compact:
+        attributes["compact"] = ""
+    client.run("/export", attrs=attributes)
+    return {
+        "success": True,
+        "name": normalized_name,
+        "path": f"{normalized_name}.rsc",
+        "include_sensitive": include_sensitive,
+        "compact": compact,
+    }
+
+
 def create_app(client: RouterOSClient) -> FastMCP:
     app = FastMCP("mikrotik")
 
@@ -384,6 +464,26 @@ def create_app(client: RouterOSClient) -> FastMCP:
             allow_remote_requests=allow_remote_requests,
             cache_size=cache_size,
         )
+
+    @app.tool(description="List router files with optional directory, name, and type filters.")
+    def file_list(
+        directory: str | None = None,
+        name: str | None = None,
+        file_type: str | None = None,
+    ) -> list[dict[str, str]]:
+        return file_list_impl(client, directory=directory, name=name, file_type=file_type)
+
+    @app.tool(description="Create a RouterOS backup file on the router.")
+    def system_backup_save(name: str) -> dict[str, str | bool]:
+        return system_backup_save_impl(client, name=name)
+
+    @app.tool(description="Export RouterOS configuration to an .rsc file on the router.")
+    def system_export(
+        name: str,
+        include_sensitive: bool = False,
+        compact: bool = False,
+    ) -> dict[str, str | bool]:
+        return system_export_impl(client, name=name, include_sensitive=include_sensitive, compact=compact)
 
     return app
 

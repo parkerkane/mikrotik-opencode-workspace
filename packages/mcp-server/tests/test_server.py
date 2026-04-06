@@ -11,6 +11,7 @@ from mikrotik_mcp.server import (
     dhcp_server_list_impl,
     dns_get_impl,
     dns_set_impl,
+    file_list_impl,
     interface_get_impl,
     interface_list_impl,
     ip_address_get_impl,
@@ -21,7 +22,9 @@ from mikrotik_mcp.server import (
     resource_print_impl,
     resource_remove_impl,
     resource_set_impl,
+    system_backup_save_impl,
     system_clock_get_impl,
+    system_export_impl,
     system_identity_get_impl,
     system_resource_get_impl,
 )
@@ -304,3 +307,77 @@ def test_dns_set_requires_at_least_one_change() -> None:
 
     with pytest.raises(ValueError, match="At least one DNS setting must be provided"):
         dns_set_impl(client)
+
+
+def test_file_list_filters_by_directory_after_router_query() -> None:
+    client = Mock()
+    client.print.return_value = [
+        {"name": "backups", "type": "directory"},
+        {"name": "backups/router.backup", "type": "backup"},
+        {"name": "backups/router.rsc", "type": "script"},
+        {"name": "logs/router.rsc", "type": "script"},
+    ]
+
+    result = file_list_impl(client, directory="backups", file_type="script")
+
+    assert result == [{"name": "backups/router.rsc", "type": "script"}]
+    client.print.assert_called_once_with("/file", proplist=None, queries=["type=script"], attrs=None)
+
+
+def test_file_list_rejects_empty_directory_filter() -> None:
+    client = Mock()
+    client.print.return_value = []
+
+    with pytest.raises(ValueError, match="directory must not be empty"):
+        file_list_impl(client, directory="   ")
+
+
+def test_system_backup_save_runs_router_command_and_returns_stable_shape() -> None:
+    client = Mock()
+    client.run.return_value = {"success": True}
+
+    result = system_backup_save_impl(client, name="backups/nightly.backup")
+
+    assert result == {
+        "success": True,
+        "name": "backups/nightly",
+        "path": "backups/nightly.backup",
+    }
+    client.run.assert_called_once_with("/system/backup/save", attrs={"name": "backups/nightly"})
+
+
+def test_system_backup_save_requires_non_empty_name() -> None:
+    client = Mock()
+
+    with pytest.raises(ValueError, match="name is required"):
+        system_backup_save_impl(client, name="   ")
+
+
+def test_system_export_runs_router_command_with_optional_flags() -> None:
+    client = Mock()
+    client.run.return_value = {"success": True}
+
+    result = system_export_impl(client, name="backups/nightly.rsc", include_sensitive=True, compact=True)
+
+    assert result == {
+        "success": True,
+        "name": "backups/nightly",
+        "path": "backups/nightly.rsc",
+        "include_sensitive": True,
+        "compact": True,
+    }
+    client.run.assert_called_once_with(
+        "/export",
+        attrs={
+            "file": "backups/nightly",
+            "show-sensitive": "",
+            "compact": "",
+        },
+    )
+
+
+def test_system_export_rejects_name_ending_in_directory_separator() -> None:
+    client = Mock()
+
+    with pytest.raises(ValueError, match="name must not end with '/'"):
+        system_export_impl(client, name="backups/")
