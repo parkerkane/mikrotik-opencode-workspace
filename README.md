@@ -80,9 +80,13 @@ Testing notes:
 
 ## Tool Surface
 
-Phase 1 exposes one MCP tool:
+Phase 2 exposes these MCP tools:
 
 - `resource_print`: generic RouterOS `/<menu>/print` access with optional `.proplist`, query words, extra attributes, and optional `jq_filter`
+- `resource_add`: generic RouterOS `/<menu>/add`
+- `resource_set`: generic RouterOS `/<menu>/set` with explicit `item_id`
+- `resource_remove`: generic RouterOS `/<menu>/remove` with explicit `item_id`
+- `command_run`: generic RouterOS command runner
 
 `jq_filter` is applied only after RouterOS replies have been normalized into Python JSON-like data.
 

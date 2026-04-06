@@ -4,7 +4,7 @@ from io import BytesIO
 
 import pytest
 
-from mikrotik_mcp.client import RouterOSClient, encode_length, decode_length, parse_reply_sentences
+from mikrotik_mcp.client import RouterOSClient, RouterOSError, encode_length, decode_length, parse_reply_sentences
 
 
 @pytest.mark.parametrize(
@@ -79,3 +79,94 @@ def test_login_trap_raises_credential_error(client: RouterOSClient, fake_socket)
 
     with pytest.raises(Exception, match="RouterOS login failed"):
         client.login()
+
+
+def test_add_builds_sentence_and_returns_done_payload(client: RouterOSClient, fake_socket) -> None:
+    fake_socket.response_bytes.extend(client.encode_sentence(["!done", "=ret=*3"]))
+    client._socket = fake_socket
+
+    result = client.add("/ip/address", attrs={"address": "192.0.2.10/24", "interface": "ether1", "disabled": False})
+
+    assert result == {"ret": "*3"}
+    assert bytes(fake_socket.sent) == client.encode_sentence(
+        [
+            "/ip/address/add",
+            "=address=192.0.2.10/24",
+            "=interface=ether1",
+            "=disabled=false",
+        ]
+    )
+
+
+def test_set_builds_sentence_with_explicit_item_id(client: RouterOSClient, fake_socket) -> None:
+    fake_socket.response_bytes.extend(client.encode_sentence(["!done"]))
+    client._socket = fake_socket
+
+    result = client.set("/ip/address", "*3", attrs={"disabled": True})
+
+    assert result == {"success": True}
+    assert bytes(fake_socket.sent) == client.encode_sentence(
+        [
+            "/ip/address/set",
+            "=.id=*3",
+            "=disabled=true",
+        ]
+    )
+
+
+def test_remove_builds_sentence_with_explicit_item_id(client: RouterOSClient, fake_socket) -> None:
+    fake_socket.response_bytes.extend(client.encode_sentence(["!empty"]))
+    fake_socket.response_bytes.extend(client.encode_sentence(["!done"]))
+    client._socket = fake_socket
+
+    result = client.remove("/ip/address", "*3")
+
+    assert result == {"success": True, "empty": True}
+    assert bytes(fake_socket.sent) == client.encode_sentence(
+        [
+            "/ip/address/remove",
+            "=.id=*3",
+        ]
+    )
+
+
+def test_command_run_returns_records_when_reply_has_re_data(client: RouterOSClient, fake_socket) -> None:
+    fake_socket.response_bytes.extend(client.encode_sentence(["!re", "=host=192.0.2.1", "=status=reachable"]))
+    fake_socket.response_bytes.extend(client.encode_sentence(["!done", "=ret=ok"]))
+    client._socket = fake_socket
+
+    result = client.run("/tool/ping", attrs={"address": "192.0.2.1", "count": 1}, queries=["status=reachable"])
+
+    assert result == [{"host": "192.0.2.1", "status": "reachable"}]
+    assert bytes(fake_socket.sent) == client.encode_sentence(
+        [
+            "/tool/ping",
+            "=address=192.0.2.1",
+            "=count=1",
+            "?status=reachable",
+        ]
+    )
+
+
+def test_command_run_returns_done_payload_without_records(client: RouterOSClient, fake_socket) -> None:
+    fake_socket.response_bytes.extend(client.encode_sentence(["!done", "=ret=ok"]))
+    client._socket = fake_socket
+
+    result = client.run("system/reboot")
+
+    assert result == {"ret": "ok"}
+
+
+def test_mutation_trap_raises_clear_routeros_error(client: RouterOSClient, fake_socket) -> None:
+    fake_socket.response_bytes.extend(client.encode_sentence(["!trap", "=category=1", "=message=failure"]))
+    fake_socket.response_bytes.extend(client.encode_sentence(["!done"]))
+    client._socket = fake_socket
+
+    with pytest.raises(RouterOSError, match=r"RouterOS command failed \(1\): failure"):
+        client.remove("/ip/address", "*3")
+
+
+@pytest.mark.parametrize("item_id", ["", "   "])
+def test_set_requires_non_empty_item_id(client: RouterOSClient, item_id: str) -> None:
+    with pytest.raises(ValueError, match="item_id is required"):
+        client.set("/ip/address", item_id, attrs={"disabled": True})

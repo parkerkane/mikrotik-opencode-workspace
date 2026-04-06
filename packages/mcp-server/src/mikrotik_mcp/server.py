@@ -33,6 +33,48 @@ def resource_print_impl(
     return items
 
 
+def resource_add_impl(
+    client: RouterOSClient,
+    *,
+    menu: str,
+    attributes: dict[str, Any] | None = None,
+) -> dict[str, str] | dict[str, bool]:
+    return client.add(menu, attrs=attributes)
+
+
+def resource_set_impl(
+    client: RouterOSClient,
+    *,
+    menu: str,
+    item_id: str,
+    attributes: dict[str, Any] | None = None,
+) -> dict[str, str] | dict[str, bool]:
+    return client.set(menu, item_id, attrs=attributes)
+
+
+def resource_remove_impl(
+    client: RouterOSClient,
+    *,
+    menu: str,
+    item_id: str,
+) -> dict[str, str] | dict[str, bool]:
+    return client.remove(menu, item_id)
+
+
+def command_run_impl(
+    client: RouterOSClient,
+    *,
+    command: str,
+    attributes: dict[str, Any] | None = None,
+    queries: Sequence[str] | None = None,
+) -> Any:
+    return client.run(
+        command,
+        attrs=attributes,
+        queries=list(queries) if queries is not None else None,
+    )
+
+
 def create_app(client: RouterOSClient) -> FastMCP:
     app = FastMCP("mikrotik")
 
@@ -54,6 +96,36 @@ def create_app(client: RouterOSClient) -> FastMCP:
             attributes=attributes,
             jq_filter=jq_filter,
         )
+
+    @app.tool(description="Run a generic RouterOS add command for a menu path.")
+    def resource_add(
+        menu: str,
+        attributes: dict[str, Any] | None = None,
+    ) -> dict[str, str] | dict[str, bool]:
+        return resource_add_impl(client, menu=menu, attributes=attributes)
+
+    @app.tool(description="Run a generic RouterOS set command for a menu path and item id.")
+    def resource_set(
+        menu: str,
+        item_id: str,
+        attributes: dict[str, Any] | None = None,
+    ) -> dict[str, str] | dict[str, bool]:
+        return resource_set_impl(client, menu=menu, item_id=item_id, attributes=attributes)
+
+    @app.tool(description="Run a generic RouterOS remove command for a menu path and item id.")
+    def resource_remove(
+        menu: str,
+        item_id: str,
+    ) -> dict[str, str] | dict[str, bool]:
+        return resource_remove_impl(client, menu=menu, item_id=item_id)
+
+    @app.tool(description="Run a generic RouterOS command path and return normalized output.")
+    def command_run(
+        command: str,
+        attributes: dict[str, Any] | None = None,
+        queries: list[str] | None = None,
+    ) -> Any:
+        return command_run_impl(client, command=command, attributes=attributes, queries=queries)
 
     return app
 

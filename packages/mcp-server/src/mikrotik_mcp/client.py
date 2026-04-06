@@ -192,6 +192,37 @@ class RouterOSClient:
         self._raise_for_errors(reply)
         return reply.records
 
+    def add(self, menu: str, *, attrs: dict[str, Any] | None = None) -> dict[str, str] | dict[str, bool]:
+        reply = self.execute(self._build_menu_sentence(menu, "add", attrs=attrs))
+        return self._normalize_mutation_result(reply)
+
+    def set(self, menu: str, item_id: str, *, attrs: dict[str, Any] | None = None) -> dict[str, str] | dict[str, bool]:
+        reply = self.execute(self._build_menu_sentence(menu, "set", item_id=item_id, attrs=attrs))
+        return self._normalize_mutation_result(reply)
+
+    def remove(self, menu: str, item_id: str) -> dict[str, str] | dict[str, bool]:
+        reply = self.execute(self._build_menu_sentence(menu, "remove", item_id=item_id))
+        return self._normalize_mutation_result(reply)
+
+    def run(
+        self,
+        path: str,
+        *,
+        attrs: dict[str, Any] | None = None,
+        queries: list[str] | None = None,
+    ) -> list[dict[str, str]] | dict[str, str] | dict[str, bool]:
+        sentence = [_normalize_command_path(path)]
+        for key, value in _normalize_attrs(attrs).items():
+            sentence.append(f"={key}={value}")
+        for query in _normalize_queries(queries):
+            sentence.append(query)
+
+        reply = self.execute(sentence)
+        self._raise_for_errors(reply)
+        if reply.records:
+            return reply.records
+        return self._normalize_mutation_result(reply)
+
     def command(self, path: str, attrs: dict[str, Any] | None = None) -> ReplyBundle:
         normalized_path = _normalize_command_path(path)
         sentence = [normalized_path]
@@ -286,11 +317,41 @@ class RouterOSClient:
         if reply.fatal:
             raise RouterOSFatalError(reply.fatal.get("message", "RouterOS connection ended unexpectedly"))
 
+    def _build_menu_sentence(
+        self,
+        menu: str,
+        action: str,
+        *,
+        item_id: str | None = None,
+        attrs: dict[str, Any] | None = None,
+    ) -> list[str]:
+        sentence = [f"{_normalize_menu(menu)}/{action}"]
+        if item_id is not None:
+            sentence.append(f"=.id={_normalize_item_id(item_id)}")
+        for key, value in _normalize_attrs(attrs).items():
+            sentence.append(f"={key}={value}")
+        return sentence
+
+    @classmethod
+    def _normalize_mutation_result(cls, reply: ReplyBundle) -> dict[str, str] | dict[str, bool]:
+        cls._raise_for_errors(reply)
+        if reply.done:
+            return reply.done
+        if reply.empty:
+            return {"success": True, "empty": True}
+        return {"success": True}
+
 
 def _normalize_menu(menu: str) -> str:
     if not menu or not menu.strip():
         raise ValueError("menu is required")
     return "/" + menu.strip().strip("/")
+
+
+def _normalize_item_id(item_id: str) -> str:
+    if not item_id or not item_id.strip():
+        raise ValueError("item_id is required")
+    return item_id.strip()
 
 
 def _normalize_command_path(path: str) -> str:
