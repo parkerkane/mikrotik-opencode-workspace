@@ -2,7 +2,7 @@
 
 ## Scope
 - The only active code package is `tools/mikrotik/`.
-- Current implementation scope is through Phase 8: generic read/mutation tools, core operational read tools, DNS set support, router file download, backup collection workflow, bridge/VLAN/firewall/PPP/WireGuard tooling, long-running command support, response formatting tightening, and dedicated operational command wrappers including ping, traceroute, and DNS resolve. Roadmap source: `docs/implementation-phases.md`.
+- Current implementation scope includes generic read/mutation tools, core operational read tools, DNS set support, router file download, backup collection workflow, bridge/VLAN/firewall/PPP/WireGuard tooling, long-running command support, response formatting tightening, and dedicated operational command wrappers including ping, traceroute, and DNS resolve.
 
 ## Working Directory
 - Run Python install and test commands from the repo root.

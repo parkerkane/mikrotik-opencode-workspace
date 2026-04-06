@@ -10,7 +10,6 @@ manager-oc/
 │
 ├── docs/
 │   ├── architecture.md           # System architecture overview
-│   ├── implementation-phases.md   # Suggested build order and milestones
 │   ├── testing.md                # pytest and mocking strategy
 │   ├── mcp-server-design.md      # MCP tools catalog and design
 │   ├── project-structure.md      # This file

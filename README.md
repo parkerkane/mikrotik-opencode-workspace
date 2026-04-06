@@ -6,8 +6,6 @@ MikroTik Manager is an OpenCode workspace for managing MikroTik routers through 
 
 Licensed under the Apache License, Version 2.0. See `LICENSE`.
 
-Current status: Phases 1-5 are implemented in `tools/mikrotik/`.
-
 Implemented today:
 - RouterOS API client over TCP/TLS
 - `/login`
@@ -26,7 +24,6 @@ Implemented today:
 - `tools/mikrotik/main.py`: MCP entry script
 - `tools/mikrotik/mikrotik_mcp/server.py`: server wiring and `resource_print`
 - `tools/mikrotik/mikrotik_mcp/client.py`: RouterOS transport and protocol logic
-- `docs/implementation-phases.md`: delivery roadmap
 
 ## Requirements
 
