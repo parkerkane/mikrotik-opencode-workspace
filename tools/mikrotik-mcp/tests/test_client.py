@@ -1,11 +1,19 @@
 from __future__ import annotations
 
 from io import BytesIO
-from unittest.mock import Mock
+from unittest.mock import Mock, call
 
 import pytest
 
-from mikrotik_mcp.client import RouterOSClient, RouterOSFatalError, RouterOSError, encode_length, decode_length, parse_reply_sentences
+from mikrotik_mcp.client import (
+    RouterOSClient,
+    RouterOSFatalError,
+    RouterOSError,
+    RouterOSTransportError,
+    decode_length,
+    encode_length,
+    parse_reply_sentences,
+)
 
 
 @pytest.mark.parametrize(
@@ -48,8 +56,8 @@ def test_parse_reply_sentences_collects_records_and_done() -> None:
 def test_parse_reply_sentences_preserves_tag_metadata() -> None:
     reply = parse_reply_sentences(
         [
-            ["!re", "=.tag=listen-1", "=name=ether1"],
-            ["!done", "=.tag=listen-1", "=ret=ok"],
+            ["!re", ".tag=listen-1", "=name=ether1"],
+            ["!done", ".tag=listen-1", "=ret=ok"],
         ]
     )
 
@@ -172,7 +180,7 @@ def test_command_run_returns_done_payload_without_records(client: RouterOSClient
 
 
 def test_command_run_supports_explicit_tag(client: RouterOSClient, fake_socket) -> None:
-    fake_socket.response_bytes.extend(client.encode_sentence(["!done", "=.tag=ping-1", "=ret=ok"]))
+    fake_socket.response_bytes.extend(client.encode_sentence(["!done", ".tag=ping-1", "=ret=ok"]))
     client._socket = fake_socket
 
     result = client.run("tool/ping", attrs={"address": "192.0.2.1"}, tag="ping-1")
@@ -182,16 +190,16 @@ def test_command_run_supports_explicit_tag(client: RouterOSClient, fake_socket) 
         [
             "/tool/ping",
             "=address=192.0.2.1",
-            "=.tag=ping-1",
+            ".tag=ping-1",
         ]
     )
 
 
 def test_listen_returns_bounded_records_and_cancels_by_tag(client: RouterOSClient, fake_socket) -> None:
-    fake_socket.response_bytes.extend(client.encode_sentence(["!re", "=.tag=listen-1", "=name=ether1"]))
-    fake_socket.response_bytes.extend(client.encode_sentence(["!re", "=.tag=listen-1", "=name=ether2"]))
-    fake_socket.response_bytes.extend(client.encode_sentence(["!done", "=.tag=listen-1-cancel", "=ret=interrupted"]))
-    fake_socket.response_bytes.extend(client.encode_sentence(["!done", "=.tag=listen-1"]))
+    fake_socket.response_bytes.extend(client.encode_sentence(["!re", ".tag=listen-1", "=name=ether1"]))
+    fake_socket.response_bytes.extend(client.encode_sentence(["!re", ".tag=listen-1", "=name=ether2"]))
+    fake_socket.response_bytes.extend(client.encode_sentence(["!done"]))
+    fake_socket.response_bytes.extend(client.encode_sentence(["!done", ".tag=listen-1", "=ret=interrupted"]))
     client._socket = fake_socket
 
     result = client.listen("/interface", queries=["running=true"], tag="listen-1", max_events=2)
@@ -203,18 +211,17 @@ def test_listen_returns_bounded_records_and_cancels_by_tag(client: RouterOSClien
     ]
     assert result.cancelled is True
     assert result.limit_reached is True
-    assert result.cancel_done == {".tag": "listen-1-cancel", "ret": "interrupted"}
+    assert result.cancel_done == {}
     assert bytes(fake_socket.sent) == client.encode_sentence(
         [
             "/interface/listen",
             "?running=true",
-            "=.tag=listen-1",
+            ".tag=listen-1",
         ]
     ) + client.encode_sentence(
         [
             "/cancel",
             "=tag=listen-1",
-            "=.tag=listen-1-cancel",
         ]
     )
 
@@ -225,38 +232,73 @@ def test_listen_requires_positive_max_events(client: RouterOSClient) -> None:
 
 
 def test_listen_generates_tag_when_not_provided(client: RouterOSClient, fake_socket) -> None:
-    fake_socket.response_bytes.extend(client.encode_sentence(["!re", "=.tag=listen-generated", "=name=ether1"]))
-    fake_socket.response_bytes.extend(client.encode_sentence(["!done", "=.tag=listen-generated-cancel", "=ret=interrupted"]))
-    fake_socket.response_bytes.extend(client.encode_sentence(["!done", "=.tag=listen-generated"]))
+    fake_socket.response_bytes.extend(client.encode_sentence(["!re", ".tag=listen-generated", "=name=ether1"]))
+    fake_socket.response_bytes.extend(client.encode_sentence(["!done"]))
+    fake_socket.response_bytes.extend(client.encode_sentence(["!done", ".tag=listen-generated", "=ret=interrupted"]))
     client._socket = fake_socket
     client._generate_tag = Mock(return_value="listen-generated")
 
     result = client.listen("/interface", max_events=1)
 
     assert result.tag == "listen-generated"
-    assert result.cancel_done == {".tag": "listen-generated-cancel", "ret": "interrupted"}
+    assert result.cancel_done == {}
     assert bytes(fake_socket.sent) == client.encode_sentence(
         [
             "/interface/listen",
-            "=.tag=listen-generated",
+            ".tag=listen-generated",
         ]
     ) + client.encode_sentence(
         [
             "/cancel",
             "=tag=listen-generated",
-            "=.tag=listen-generated-cancel",
         ]
     )
 
 
 def test_listen_raises_when_cancel_returns_fatal(client: RouterOSClient, fake_socket) -> None:
-    fake_socket.response_bytes.extend(client.encode_sentence(["!re", "=.tag=listen-1", "=name=ether1"]))
-    fake_socket.response_bytes.extend(client.encode_sentence(["!fatal", "=.tag=listen-1-cancel", "=message=connection closing"]))
-    fake_socket.response_bytes.extend(client.encode_sentence(["!done", "=.tag=listen-1"]))
+    fake_socket.response_bytes.extend(client.encode_sentence(["!re", ".tag=listen-1", "=name=ether1"]))
+    fake_socket.response_bytes.extend(client.encode_sentence(["!fatal", "=message=connection closing"]))
     client._socket = fake_socket
 
     with pytest.raises(RouterOSFatalError, match="connection closing"):
         client.listen("/interface", tag="listen-1", max_events=1)
+
+
+def test_listen_uses_routeros_dot_tag_word(client: RouterOSClient, fake_socket) -> None:
+    fake_socket.response_bytes.extend(client.encode_sentence(["!done", ".tag=listen-1"]))
+    client._socket = fake_socket
+
+    result = client.listen("/interface", tag="listen-1", max_events=1)
+
+    assert result.tag == "listen-1"
+    assert bytes(fake_socket.sent) == client.encode_sentence([
+        "/interface/listen",
+        ".tag=listen-1",
+    ])
+
+
+def test_listen_cancels_and_returns_empty_batch_after_timeout(client: RouterOSClient) -> None:
+    client.write_sentence = Mock()
+    client.read_sentence = Mock(
+        side_effect=[
+            RouterOSTransportError("RouterOS API read timed out"),
+            ["!done"],
+            ["!empty", ".tag=listen-timeout"],
+            ["!done", ".tag=listen-timeout"],
+        ]
+    )
+
+    result = client.listen("/interface", tag="listen-timeout", max_events=1)
+
+    assert result.tag == "listen-timeout"
+    assert result.records == []
+    assert result.empty is True
+    assert result.cancelled is True
+    assert result.cancel_done == {}
+    assert client.write_sentence.call_args_list == [
+        call(["/interface/listen", ".tag=listen-timeout"]),
+        call(["/cancel", "=tag=listen-timeout"]),
+    ]
 
 
 def test_cancel_builds_cancel_sentence(client: RouterOSClient, fake_socket) -> None:

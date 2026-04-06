@@ -133,6 +133,10 @@ def parse_reply_sentence(sentence: list[str]) -> tuple[str, dict[str, str]]:
     for word in words:
         if not word:
             continue
+        if word.startswith(".") and "=" in word:
+            key, _, value = word.partition("=")
+            attrs[key] = value
+            continue
         if word.startswith("="):
             key, _, value = word[1:].partition("=")
             attrs[key] = value
@@ -289,7 +293,7 @@ class RouterOSClient:
             sentence.append(f"={key}={value}")
         for query in _normalize_queries(queries):
             sentence.append(query)
-        sentence.append(f"=.tag={listen_tag}")
+        sentence.append(f".tag={listen_tag}")
 
         result = ListenResult(tag=listen_tag)
         self.write_sentence(sentence)
@@ -298,10 +302,18 @@ class RouterOSClient:
         listen_done = False
         cancel_done = False
         while True:
-            reply_type, reply_attrs = parse_reply_sentence(self.read_sentence())
+            try:
+                reply_type, reply_attrs = parse_reply_sentence(self.read_sentence())
+            except RouterOSTransportError as exc:
+                if "timed out" not in str(exc).lower() or cancel_sent:
+                    raise
+                result.cancelled = True
+                self.write_sentence(self._build_cancel_sentence(listen_tag, cancel_tag=cancel_tag))
+                cancel_sent = True
+                continue
             reply_tag = reply_attrs.get(".tag")
 
-            if reply_tag == listen_tag:
+            if reply_tag == listen_tag or (reply_tag is None and not cancel_sent and reply_type in {"!trap", "!fatal", "!done", "!empty"}):
                 if reply_type == "!re":
                     result.records.append(reply_attrs)
                     if len(result.records) >= max_events and not cancel_sent:
@@ -310,7 +322,10 @@ class RouterOSClient:
                         self.write_sentence(self._build_cancel_sentence(listen_tag, cancel_tag=cancel_tag))
                         cancel_sent = True
                 elif reply_type == "!trap":
-                    result.traps.append(reply_attrs)
+                    if cancel_sent and reply_attrs.get("message") == "interrupted":
+                        result.cancelled = True
+                    else:
+                        result.traps.append(reply_attrs)
                 elif reply_type == "!done":
                     result.done = reply_attrs
                     listen_done = True
@@ -320,7 +335,7 @@ class RouterOSClient:
                 elif reply_type == "!empty":
                     result.empty = True
 
-            if reply_tag == cancel_tag:
+            if reply_tag == cancel_tag or (cancel_sent and reply_tag is None and reply_type in {"!done", "!fatal"}):
                 if reply_type == "!done":
                     result.cancel_done = reply_attrs
                     cancel_done = True
@@ -328,7 +343,7 @@ class RouterOSClient:
                     result.cancel_fatal = reply_attrs
                     cancel_done = True
 
-            if listen_done and (not cancel_sent or cancel_done):
+            if result.cancel_fatal or (listen_done and (not cancel_sent or cancel_done)):
                 break
 
         if result.cancel_fatal:
@@ -363,7 +378,7 @@ class RouterOSClient:
         for query in _normalize_queries(queries):
             sentence.append(query)
         if tag is not None:
-            sentence.append(f"=.tag={_normalize_tag(tag)}")
+            sentence.append(f".tag={_normalize_tag(tag)}")
         return sentence
 
     def execute(self, words: list[str]) -> ReplyBundle:
@@ -469,10 +484,8 @@ class RouterOSClient:
         return sentence
 
     def _build_cancel_sentence(self, tag: str, *, cancel_tag: str | None = None) -> list[str]:
-        sentence = ["/cancel", f"=tag={_normalize_tag(tag)}"]
-        if cancel_tag is not None:
-            sentence.append(f"=.tag={_normalize_tag(cancel_tag)}")
-        return sentence
+        _ = cancel_tag
+        return ["/cancel", f"=tag={_normalize_tag(tag)}"]
 
     def _cancel_tag(self, tag: str) -> str:
         return f"{tag}-cancel"
