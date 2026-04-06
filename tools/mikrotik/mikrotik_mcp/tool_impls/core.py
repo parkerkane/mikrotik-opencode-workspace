@@ -21,7 +21,7 @@ from time import perf_counter
 from typing import Any
 
 from ..client import RouterOSAuthError, RouterOSClient, RouterOSFatalError, RouterOSError, RouterOSTransportError
-from ..downloads import FTPFileDownloader, RouterFileDownloadError, load_file_transfer_settings
+from ..downloads import RouterFileDownloadError, SCPFileDownloader, load_file_transfer_settings
 from ..filters import apply_jq_filter
 from ..server_helpers import (
     build_equality_queries,
@@ -266,17 +266,16 @@ def _api_config_status(client: RouterOSClient) -> dict[str, Any]:
     }
 
 
-def _ftp_config_status(client: RouterOSClient) -> dict[str, Any]:
-    ftp_user = os.getenv("MIKROTIK_FTP_USER")
-    ftp_password = os.getenv("MIKROTIK_FTP_PASSWORD")
+def _scp_config_status(client: RouterOSClient) -> dict[str, Any]:
+    scp_user = os.getenv("MIKROTIK_SCP_USER")
+    scp_password = os.getenv("MIKROTIK_SCP_PASSWORD")
     api_user = os.getenv("MIKROTIK_USER")
     api_password = os.getenv("MIKROTIK_PASSWORD")
     return {
-        "ftp_credentials_configured": bool((ftp_user and ftp_password) or (api_user and api_password)),
-        "ftp_host_override": bool(os.getenv("MIKROTIK_FTP_HOST")),
-        "ftp_port_override": bool(os.getenv("MIKROTIK_FTP_PORT")),
-        "ftp_tls_override": bool(os.getenv("MIKROTIK_FTP_TLS")),
-        "resolved_host": os.getenv("MIKROTIK_FTP_HOST") or client.host,
+        "scp_credentials_configured": bool((scp_user and scp_password) or (api_user and api_password)),
+        "scp_host_override": bool(os.getenv("MIKROTIK_SCP_HOST")),
+        "scp_port_override": bool(os.getenv("MIKROTIK_SCP_PORT")),
+        "resolved_host": os.getenv("MIKROTIK_SCP_HOST") or client.host,
     }
 
 
@@ -292,23 +291,23 @@ def _classify_api_error(exc: Exception) -> str:
     return "api.unknown"
 
 
-def _classify_ftp_error(exc: Exception) -> str:
+def _classify_scp_error(exc: Exception) -> str:
     if isinstance(exc, RuntimeError) and "must be set before downloading files" in str(exc):
-        return "ftp.config_missing"
+        return "scp.config_missing"
     message = str(exc).lower()
-    if "login incorrect" in message or "not logged in" in message or "530" in message:
-        return "ftp.auth_failed"
+    if "authentication failed" in message or "auth" in message:
+        return "scp.auth_failed"
     if "directory probe failed" in message:
-        return "ftp.operation_failed"
-    if "failed to connect to ftp service" in message:
-        return "ftp.connect_failed"
-    return "ftp.error"
+        return "scp.operation_failed"
+    if "failed to connect to scp service" in message:
+        return "scp.connect_failed"
+    return "scp.error"
 
 
-def _overall_health_status(*, api_ok: bool, ftp_ok: bool) -> str:
-    if api_ok and ftp_ok:
+def _overall_health_status(*, api_ok: bool, scp_ok: bool) -> str:
+    if api_ok and scp_ok:
         return "healthy"
-    if api_ok or ftp_ok:
+    if api_ok or scp_ok:
         return "degraded"
     return "failed"
 
@@ -317,7 +316,7 @@ def healthcheck_impl(client: RouterOSClient) -> dict[str, Any]:
     timestamp = _utc_timestamp()
     config = {
         **_api_config_status(client),
-        **_ftp_config_status(client),
+        **_scp_config_status(client),
     }
 
     api_started_at = perf_counter()
@@ -346,38 +345,36 @@ def healthcheck_impl(client: RouterOSClient) -> dict[str, Any]:
     api_result["duration_ms"] = _elapsed_ms(api_started_at)
 
     settings = None
-    ftp_started_at = perf_counter()
+    scp_started_at = perf_counter()
     try:
         settings = load_file_transfer_settings(client.host)
-        ftp_probe = FTPFileDownloader(settings).check_connection()
-        ftp_result: dict[str, Any] = {
+        scp_probe = SCPFileDownloader(settings).check_connection()
+        scp_result: dict[str, Any] = {
             "ok": True,
             "status": "ok",
-            "code": "ftp.ok",
-            "message": f"FTP login and directory probe succeeded for {settings.host}:{settings.port}",
+            "code": "scp.ok",
+            "message": f"SCP login and directory probe succeeded for {settings.host}:{settings.port}",
             "host": settings.host,
             "port": settings.port,
-            "tls": settings.use_tls,
-            "probe": ftp_probe,
+            "probe": scp_probe,
         }
     except (RouterFileDownloadError, RuntimeError, ValueError) as exc:
-        ftp_result = {
+        scp_result = {
             "ok": False,
             "status": "failed",
-            "code": _classify_ftp_error(exc),
+            "code": _classify_scp_error(exc),
             "message": str(exc),
         }
         if settings is not None:
-            ftp_result.update(
+            scp_result.update(
                 {
                     "host": settings.host,
                     "port": settings.port,
-                    "tls": settings.use_tls,
                 }
             )
-    ftp_result["duration_ms"] = _elapsed_ms(ftp_started_at)
+    scp_result["duration_ms"] = _elapsed_ms(scp_started_at)
 
-    overall_status = _overall_health_status(api_ok=bool(api_result["ok"]), ftp_ok=bool(ftp_result["ok"]))
+    overall_status = _overall_health_status(api_ok=bool(api_result["ok"]), scp_ok=bool(scp_result["ok"]))
 
     return {
         "success": overall_status == "healthy",
@@ -386,7 +383,7 @@ def healthcheck_impl(client: RouterOSClient) -> dict[str, Any]:
         "target_host": client.host,
         "config": config,
         "api": api_result,
-        "ftp": ftp_result,
+        "scp": scp_result,
     }
 
 

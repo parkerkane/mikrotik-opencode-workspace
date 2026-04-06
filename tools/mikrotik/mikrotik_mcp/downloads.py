@@ -15,11 +15,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from ftplib import FTP, FTP_TLS, all_errors
 from pathlib import Path
 import os
-import ssl
 from typing import Protocol
+
+import paramiko
 
 
 class RouterFileDownloadError(RuntimeError):
@@ -31,9 +31,7 @@ class FileTransferSettings:
     host: str
     username: str
     password: str
-    port: int = 21
-    use_tls: bool = True
-    tls_verify: bool = True
+    port: int = 22
     timeout: float = 30.0
 
 
@@ -41,31 +39,32 @@ class FileDownloader(Protocol):
     def download_file(self, router_path: str, local_path: str | Path) -> None: ...
 
 
-class FTPFileDownloader:
+class SCPFileDownloader:
     def __init__(self, settings: FileTransferSettings) -> None:
         self.settings = settings
 
     def check_connection(self) -> dict[str, object]:
         try:
-            session = self._connect()
-        except all_errors as exc:
+            ssh_client = self._connect()
+        except (paramiko.SSHException, OSError) as exc:
             raise RouterFileDownloadError(
-                f"Failed to connect to FTP service on {self.settings.host}:{self.settings.port}: {exc}"
+                f"Failed to connect to SCP service on {self.settings.host}:{self.settings.port}: {exc}"
             ) from exc
 
         try:
-            working_directory = session.pwd()
-            entries = session.nlst()
-        except all_errors as exc:
-            raise RouterFileDownloadError(f"Connected to FTP service but directory probe failed: {exc}") from exc
+            sftp_client = ssh_client.open_sftp()
+            working_directory = sftp_client.normalize(".")
+            entries = [entry.filename for entry in sftp_client.listdir_attr(working_directory)]
+        except (paramiko.SSHException, OSError) as exc:
+            raise RouterFileDownloadError(f"Connected to SCP service but directory probe failed: {exc}") from exc
         finally:
-            self._close_session(session)
+            self._close_session(ssh_client)
 
         return {
             "working_directory": working_directory,
             "listing_count": len(entries),
             "listing_sample": entries[:5],
-            "operation": "pwd+nlst",
+            "operation": "normalize+listdir_attr",
         }
 
     def download_file(self, router_path: str, local_path: str | Path) -> None:
@@ -74,62 +73,58 @@ class FTPFileDownloader:
         target_path.parent.mkdir(parents=True, exist_ok=True)
 
         try:
-            session = self._connect()
-        except all_errors as exc:
-            raise RouterFileDownloadError(f"Failed to connect to FTP service on {self.settings.host}:{self.settings.port}: {exc}") from exc
+            ssh_client = self._connect()
+        except (paramiko.SSHException, OSError) as exc:
+            raise RouterFileDownloadError(
+                f"Failed to connect to SCP service on {self.settings.host}:{self.settings.port}: {exc}"
+            ) from exc
 
         try:
             with target_path.open("wb") as handle:
-                session.retrbinary(f"RETR {remote_name}", handle.write)
+                sftp_client = ssh_client.open_sftp()
+                remote_file = sftp_client.file(remote_name, mode="rb")
+                try:
+                    handle.write(remote_file.read())
+                finally:
+                    remote_file.close()
+                    sftp_client.close()
         except OSError as exc:
             raise RouterFileDownloadError(f"Failed to write local file '{target_path}': {exc}") from exc
-        except all_errors as exc:
+        except (paramiko.SSHException, OSError) as exc:
             raise RouterFileDownloadError(f"Failed to download router file '{remote_name}': {exc}") from exc
         finally:
-            self._close_session(session)
+            self._close_session(ssh_client)
 
-    def _connect(self) -> FTP | FTP_TLS:
-        if self.settings.use_tls:
-            context = ssl.create_default_context()
-            if not self.settings.tls_verify:
-                context.check_hostname = False
-                context.verify_mode = ssl.CERT_NONE
-            session = FTP_TLS(context=context, timeout=self.settings.timeout)
-        else:
-            session = FTP(timeout=self.settings.timeout)
+    def _connect(self) -> paramiko.SSHClient:
+        ssh_client = paramiko.SSHClient()
+        ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh_client.connect(
+            hostname=self.settings.host,
+            port=self.settings.port,
+            username=self.settings.username,
+            password=self.settings.password,
+            timeout=self.settings.timeout,
+        )
+        return ssh_client
 
-        session.connect(self.settings.host, self.settings.port)
-        session.login(self.settings.username, self.settings.password)
-        if self.settings.use_tls:
-            session.prot_p()
-        return session
-
-    def _close_session(self, session: FTP | FTP_TLS) -> None:
-        try:
-            session.quit()
-        except all_errors:
-            session.close()
+    def _close_session(self, ssh_client: paramiko.SSHClient) -> None:
+        ssh_client.close()
 
 
 def load_file_transfer_settings(host: str) -> FileTransferSettings:
-    username = os.getenv("MIKROTIK_FTP_USER") or os.getenv("MIKROTIK_USER")
-    password = os.getenv("MIKROTIK_FTP_PASSWORD") or os.getenv("MIKROTIK_PASSWORD")
+    username = os.getenv("MIKROTIK_SCP_USER") or os.getenv("MIKROTIK_USER")
+    password = os.getenv("MIKROTIK_SCP_PASSWORD") or os.getenv("MIKROTIK_PASSWORD")
     if not username or not password:
         raise RuntimeError(
-            "MIKROTIK_FTP_USER/MIKROTIK_FTP_PASSWORD or MIKROTIK_USER/MIKROTIK_PASSWORD must be set before downloading files"
+            "MIKROTIK_SCP_USER/MIKROTIK_SCP_PASSWORD or MIKROTIK_USER/MIKROTIK_PASSWORD must be set before downloading files"
         )
 
-    use_tls = _parse_bool(os.getenv("MIKROTIK_FTP_TLS"), default=True)
-    tls_verify = _parse_bool(os.getenv("MIKROTIK_FTP_TLS_VERIFY"), default=_parse_bool(os.getenv("MIKROTIK_TLS_VERIFY"), default=True))
-
     return FileTransferSettings(
-        host=os.getenv("MIKROTIK_FTP_HOST") or host,
+        host=os.getenv("MIKROTIK_SCP_HOST") or host,
         username=username,
         password=password,
-        port=int(os.getenv("MIKROTIK_FTP_PORT") or 21),
-        use_tls=use_tls,
-        tls_verify=tls_verify,
-        timeout=float(os.getenv("MIKROTIK_FTP_TIMEOUT") or 30.0),
+        port=int(os.getenv("MIKROTIK_SCP_PORT") or 22),
+        timeout=float(os.getenv("MIKROTIK_SCP_TIMEOUT") or 30.0),
     )
 
 
@@ -138,9 +133,3 @@ def _normalize_router_path(router_path: str) -> str:
     if not value:
         raise ValueError("router_path is required")
     return value.lstrip("/")
-
-
-def _parse_bool(value: str | None, *, default: bool) -> bool:
-    if value is None or value == "":
-        return default
-    return value.strip().lower() in {"1", "true", "yes", "on"}

@@ -4,174 +4,191 @@ from pathlib import Path
 
 import pytest
 
-from mikrotik_mcp.downloads import FTPFileDownloader, RouterFileDownloadError, load_file_transfer_settings
+from mikrotik_mcp.downloads import SCPFileDownloader, RouterFileDownloadError, load_file_transfer_settings
 
 
-def test_load_file_transfer_settings_uses_ftp_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_load_file_transfer_settings_uses_scp_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("MIKROTIK_USER", "api-user")
     monkeypatch.setenv("MIKROTIK_PASSWORD", "api-pass")
-    monkeypatch.setenv("MIKROTIK_TLS_VERIFY", "false")
-    monkeypatch.setenv("MIKROTIK_FTP_HOST", "files.router.test")
-    monkeypatch.setenv("MIKROTIK_FTP_USER", "ftp-user")
-    monkeypatch.setenv("MIKROTIK_FTP_PASSWORD", "ftp-pass")
-    monkeypatch.setenv("MIKROTIK_FTP_PORT", "2121")
-    monkeypatch.setenv("MIKROTIK_FTP_TLS", "false")
-    monkeypatch.setenv("MIKROTIK_FTP_TIMEOUT", "12.5")
+    monkeypatch.setenv("MIKROTIK_SCP_HOST", "files.router.test")
+    monkeypatch.setenv("MIKROTIK_SCP_USER", "scp-user")
+    monkeypatch.setenv("MIKROTIK_SCP_PASSWORD", "scp-pass")
+    monkeypatch.setenv("MIKROTIK_SCP_PORT", "2222")
+    monkeypatch.setenv("MIKROTIK_SCP_TIMEOUT", "12.5")
 
     settings = load_file_transfer_settings("router.test")
 
     assert settings.host == "files.router.test"
-    assert settings.username == "ftp-user"
-    assert settings.password == "ftp-pass"
-    assert settings.port == 2121
-    assert settings.use_tls is False
-    assert settings.tls_verify is False
+    assert settings.username == "scp-user"
+    assert settings.password == "scp-pass"
+    assert settings.port == 2222
     assert settings.timeout == 12.5
 
 
 def test_load_file_transfer_settings_falls_back_to_api_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("MIKROTIK_USER", "admin")
     monkeypatch.setenv("MIKROTIK_PASSWORD", "secret")
-    monkeypatch.delenv("MIKROTIK_FTP_USER", raising=False)
-    monkeypatch.delenv("MIKROTIK_FTP_PASSWORD", raising=False)
-    monkeypatch.delenv("MIKROTIK_FTP_HOST", raising=False)
-    monkeypatch.delenv("MIKROTIK_FTP_PORT", raising=False)
-    monkeypatch.delenv("MIKROTIK_FTP_TLS", raising=False)
-    monkeypatch.delenv("MIKROTIK_FTP_TLS_VERIFY", raising=False)
-    monkeypatch.setenv("MIKROTIK_TLS_VERIFY", "true")
+    monkeypatch.delenv("MIKROTIK_SCP_USER", raising=False)
+    monkeypatch.delenv("MIKROTIK_SCP_PASSWORD", raising=False)
+    monkeypatch.delenv("MIKROTIK_SCP_HOST", raising=False)
+    monkeypatch.delenv("MIKROTIK_SCP_PORT", raising=False)
 
     settings = load_file_transfer_settings("router.test")
 
     assert settings.host == "router.test"
     assert settings.username == "admin"
     assert settings.password == "secret"
-    assert settings.port == 21
-    assert settings.use_tls is True
-    assert settings.tls_verify is True
+    assert settings.port == 22
 
 
 def test_load_file_transfer_settings_requires_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("MIKROTIK_USER", raising=False)
     monkeypatch.delenv("MIKROTIK_PASSWORD", raising=False)
-    monkeypatch.delenv("MIKROTIK_FTP_USER", raising=False)
-    monkeypatch.delenv("MIKROTIK_FTP_PASSWORD", raising=False)
+    monkeypatch.delenv("MIKROTIK_SCP_USER", raising=False)
+    monkeypatch.delenv("MIKROTIK_SCP_PASSWORD", raising=False)
 
     with pytest.raises(RuntimeError, match="must be set before downloading files"):
         load_file_transfer_settings("router.test")
 
 
-class FakeFTPSession:
-    def __init__(self, payload: bytes = b"backup-data", *, fail_on_retr: bool = False) -> None:
+class FakeDirEntry:
+    def __init__(self, filename: str) -> None:
+        self.filename = filename
+
+
+class FakeRemoteFile:
+    def __init__(self, payload: bytes = b"backup-data", *, fail_on_read: bool = False) -> None:
         self.payload = payload
-        self.fail_on_retr = fail_on_retr
-        self.connected_to: tuple[str, int] | None = None
-        self.logged_in_as: tuple[str, str] | None = None
-        self.protected = False
-        self.quit_called = False
-        self.close_called = False
+        self.fail_on_read = fail_on_read
 
-    def connect(self, host: str, port: int) -> None:
-        self.connected_to = (host, port)
-
-    def login(self, username: str, password: str) -> None:
-        self.logged_in_as = (username, password)
-
-    def prot_p(self) -> None:
-        self.protected = True
-
-    def retrbinary(self, command: str, callback) -> None:
-        if self.fail_on_retr:
+    def read(self) -> bytes:
+        if self.fail_on_read:
             raise OSError("read failed")
-        assert command == "RETR backups/router.backup"
-        callback(self.payload)
+        return self.payload
 
-    def pwd(self) -> str:
+    def close(self) -> None:
+        return None
+
+
+class FakeSFTPClient:
+    def __init__(self, payload: bytes = b"backup-data", *, fail_on_read: bool = False, fail_on_listdir: bool = False) -> None:
+        self.payload = payload
+        self.fail_on_read = fail_on_read
+        self.fail_on_listdir = fail_on_listdir
+        self.closed = False
+
+    def normalize(self, path: str) -> str:
+        assert path == "."
         return "/"
 
-    def nlst(self) -> list[str]:
-        return ["backups", "flash", "skins"]
+    def listdir_attr(self, path: str) -> list[FakeDirEntry]:
+        assert path == "/"
+        if self.fail_on_listdir:
+            raise OSError("listing failed")
+        return [FakeDirEntry("backups"), FakeDirEntry("flash"), FakeDirEntry("skins")]
 
-    def quit(self) -> None:
-        self.quit_called = True
+    def file(self, path: str, mode: str = "rb") -> FakeRemoteFile:
+        assert path == "backups/router.backup"
+        assert mode == "rb"
+        return FakeRemoteFile(self.payload, fail_on_read=self.fail_on_read)
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class FakeSSHClient:
+    def __init__(self, *, fail_on_connect: bool = False, sftp_client: FakeSFTPClient | None = None) -> None:
+        self.connected_to: tuple[str, int] | None = None
+        self.logged_in_as: tuple[str, str] | None = None
+        self.close_called = False
+        self.policy = None
+        self.fail_on_connect = fail_on_connect
+        self.sftp_client = sftp_client or FakeSFTPClient()
+
+    def set_missing_host_key_policy(self, policy) -> None:
+        self.policy = policy
+
+    def connect(self, hostname: str, port: int, username: str, password: str, timeout: float) -> None:
+        if self.fail_on_connect:
+            raise OSError("connect failed")
+        self.connected_to = (hostname, port)
+        self.logged_in_as = (username, password)
+        self.timeout = timeout
+
+    def open_sftp(self) -> FakeSFTPClient:
+        return self.sftp_client
 
     def close(self) -> None:
         self.close_called = True
 
 
-def test_ftp_file_downloader_writes_downloaded_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    session = FakeFTPSession()
-    monkeypatch.setattr("mikrotik_mcp.downloads.FTP_TLS", lambda **_: session)
+def test_scp_file_downloader_writes_downloaded_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    ssh_client = FakeSSHClient()
+    monkeypatch.setattr("mikrotik_mcp.downloads.paramiko.SSHClient", lambda: ssh_client)
 
     settings = load_file_transfer_settings_for_test()
-    downloader = FTPFileDownloader(settings)
+    downloader = SCPFileDownloader(settings)
     destination = tmp_path / "artifacts" / "router.backup"
 
     downloader.download_file("backups/router.backup", destination)
 
     assert destination.read_bytes() == b"backup-data"
-    assert session.connected_to == ("router.test", 21)
-    assert session.logged_in_as == ("admin", "secret")
-    assert session.protected is True
-    assert session.quit_called is True
+    assert ssh_client.connected_to == ("router.test", 22)
+    assert ssh_client.logged_in_as == ("admin", "secret")
+    assert ssh_client.close_called is True
 
 
-def test_ftp_file_downloader_check_connection_logs_in_and_closes(monkeypatch: pytest.MonkeyPatch) -> None:
-    session = FakeFTPSession()
-    monkeypatch.setattr("mikrotik_mcp.downloads.FTP_TLS", lambda **_: session)
+def test_scp_file_downloader_check_connection_logs_in_and_closes(monkeypatch: pytest.MonkeyPatch) -> None:
+    ssh_client = FakeSSHClient()
+    monkeypatch.setattr("mikrotik_mcp.downloads.paramiko.SSHClient", lambda: ssh_client)
 
-    downloader = FTPFileDownloader(load_file_transfer_settings_for_test())
+    downloader = SCPFileDownloader(load_file_transfer_settings_for_test())
 
     result = downloader.check_connection()
 
-    assert session.connected_to == ("router.test", 21)
-    assert session.logged_in_as == ("admin", "secret")
-    assert session.protected is True
-    assert session.quit_called is True
+    assert ssh_client.connected_to == ("router.test", 22)
+    assert ssh_client.logged_in_as == ("admin", "secret")
+    assert ssh_client.close_called is True
     assert result == {
         "working_directory": "/",
         "listing_count": 3,
         "listing_sample": ["backups", "flash", "skins"],
-        "operation": "pwd+nlst",
+        "operation": "normalize+listdir_attr",
     }
 
 
-def test_ftp_file_downloader_wraps_local_write_failures(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    session = FakeFTPSession(fail_on_retr=True)
-    monkeypatch.setattr("mikrotik_mcp.downloads.FTP_TLS", lambda **_: session)
+def test_scp_file_downloader_wraps_local_write_failures(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    ssh_client = FakeSSHClient()
+    monkeypatch.setattr("mikrotik_mcp.downloads.paramiko.SSHClient", lambda: ssh_client)
 
-    downloader = FTPFileDownloader(load_file_transfer_settings_for_test())
+    downloader = SCPFileDownloader(load_file_transfer_settings_for_test())
 
-    with pytest.raises(RouterFileDownloadError, match="Failed to write local file|Failed to download router file"):
-        downloader.download_file("backups/router.backup", tmp_path / "router.backup")
+    with pytest.raises(RouterFileDownloadError, match="Failed to write local file"):
+        downloader.download_file("backups/router.backup", tmp_path)
 
 
-def test_ftp_file_downloader_check_connection_wraps_connect_failures(monkeypatch: pytest.MonkeyPatch) -> None:
-    class FailingFTPSession(FakeFTPSession):
-        def connect(self, host: str, port: int) -> None:
-            raise OSError("connect failed")
+def test_scp_file_downloader_check_connection_wraps_connect_failures(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "mikrotik_mcp.downloads.paramiko.SSHClient",
+        lambda: FakeSSHClient(fail_on_connect=True),
+    )
 
-    monkeypatch.setattr("mikrotik_mcp.downloads.FTP_TLS", lambda **_: FailingFTPSession())
+    downloader = SCPFileDownloader(load_file_transfer_settings_for_test())
 
-    downloader = FTPFileDownloader(load_file_transfer_settings_for_test())
-
-    with pytest.raises(RouterFileDownloadError, match="Failed to connect to FTP service"):
+    with pytest.raises(RouterFileDownloadError, match="Failed to connect to SCP service"):
         downloader.check_connection()
 
 
-def test_ftp_file_downloader_check_connection_wraps_directory_probe_failures(monkeypatch: pytest.MonkeyPatch) -> None:
-    class FailingProbeSession(FakeFTPSession):
-        def nlst(self) -> list[str]:
-            raise OSError("listing failed")
+def test_scp_file_downloader_check_connection_wraps_directory_probe_failures(monkeypatch: pytest.MonkeyPatch) -> None:
+    ssh_client = FakeSSHClient(sftp_client=FakeSFTPClient(fail_on_listdir=True))
+    monkeypatch.setattr("mikrotik_mcp.downloads.paramiko.SSHClient", lambda: ssh_client)
 
-    session = FailingProbeSession()
-    monkeypatch.setattr("mikrotik_mcp.downloads.FTP_TLS", lambda **_: session)
-
-    downloader = FTPFileDownloader(load_file_transfer_settings_for_test())
+    downloader = SCPFileDownloader(load_file_transfer_settings_for_test())
 
     with pytest.raises(RouterFileDownloadError, match="directory probe failed"):
         downloader.check_connection()
 
-    assert session.quit_called is True
+    assert ssh_client.close_called is True
 
 
 def load_file_transfer_settings_for_test():
@@ -179,9 +196,7 @@ def load_file_transfer_settings_for_test():
         host = "router.test"
         username = "admin"
         password = "secret"
-        port = 21
-        use_tls = True
-        tls_verify = False
+        port = 22
         timeout = 5.0
 
     return Settings()

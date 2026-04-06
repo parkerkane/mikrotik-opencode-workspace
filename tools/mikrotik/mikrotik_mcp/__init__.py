@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from .client import RouterOSClient
-from .downloads import FTPFileDownloader, FileTransferSettings, RouterFileDownloadError, load_file_transfer_settings
+from .downloads import FileTransferSettings, RouterFileDownloadError, SCPFileDownloader, load_file_transfer_settings
 from .server import (
     command_cancel_impl,
     command_run_impl,
@@ -37,7 +37,7 @@ from .server import (
 
 __all__ = [
     "RouterOSClient",
-    "FTPFileDownloader",
+    "SCPFileDownloader",
     "FileTransferSettings",
     "RouterFileDownloadError",
     "command_cancel_impl",

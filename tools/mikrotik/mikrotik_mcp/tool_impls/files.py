@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from ..client import RouterOSClient
-from ..downloads import FTPFileDownloader, FileDownloader, RouterFileDownloadError, load_file_transfer_settings
+from ..downloads import FileDownloader, RouterFileDownloadError, SCPFileDownloader, load_file_transfer_settings
 from ..server_helpers import (
     build_equality_queries,
     file_exists_in_directory,
@@ -74,7 +74,7 @@ def _download_router_file(
     resolved_downloader = downloader
     if resolved_downloader is None:
         settings = load_file_transfer_settings(client.host)
-        resolved_downloader = FTPFileDownloader(settings)
+        resolved_downloader = SCPFileDownloader(settings)
 
     if local_path is None:
         target_path = unique_local_path(workspace_root() / "backups", Path(normalized_router_path).name)

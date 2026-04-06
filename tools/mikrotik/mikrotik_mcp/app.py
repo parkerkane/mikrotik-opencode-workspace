@@ -179,7 +179,7 @@ def _register_core_tools(app: FastMCP, client: RouterOSClient) -> None:
     def system_identity_get() -> Annotated[CallToolResult, dict[str, str]]:
         return format_system_identity_result(core.system_identity_get_impl(client))
 
-    @app.tool(description="Check whether the MCP can fetch RouterOS API data and connect to FTP.")
+    @app.tool(description="Check whether the MCP can fetch RouterOS API data and connect to SCP.")
     def healthcheck() -> Annotated[CallToolResult, dict[str, Any]]:
         return format_healthcheck_result(core.healthcheck_impl(client))
 

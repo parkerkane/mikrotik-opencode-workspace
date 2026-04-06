@@ -179,7 +179,7 @@ async def test_app_dns_get_returns_summary_line_and_structured_content(socket_en
 
 
 @pytest.mark.asyncio
-async def test_app_healthcheck_returns_api_and_ftp_statuses(socket_enabled, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_app_healthcheck_returns_api_and_scp_statuses(socket_enabled, monkeypatch: pytest.MonkeyPatch) -> None:
     client = Mock(host="router.test")
     client.port = 8729
     client.use_ssl = True
@@ -188,24 +188,23 @@ async def test_app_healthcheck_returns_api_and_ftp_statuses(socket_enabled, monk
     client.print.return_value = [{"name": "lab-router"}]
     monkeypatch.setenv("MIKROTIK_USER", "api-user")
     monkeypatch.setenv("MIKROTIK_PASSWORD", "api-pass")
-    monkeypatch.setenv("MIKROTIK_FTP_USER", "ftp-user")
-    monkeypatch.setenv("MIKROTIK_FTP_PASSWORD", "ftp-pass")
-    monkeypatch.setenv("MIKROTIK_FTP_HOST", "files.router.test")
+    monkeypatch.setenv("MIKROTIK_SCP_USER", "scp-user")
+    monkeypatch.setenv("MIKROTIK_SCP_PASSWORD", "scp-pass")
+    monkeypatch.setenv("MIKROTIK_SCP_HOST", "files.router.test")
 
     class Settings:
         host = "files.router.test"
         port = 21
-        use_tls = True
 
     downloader = Mock()
     downloader.check_connection.return_value = {
         "working_directory": "/",
         "listing_count": 2,
         "listing_sample": ["backups", "flash"],
-        "operation": "pwd+nlst",
+        "operation": "normalize+listdir_attr",
     }
     monkeypatch.setattr(core, "load_file_transfer_settings", lambda host: Settings())
-    monkeypatch.setattr(core, "FTPFileDownloader", lambda settings: downloader)
+    monkeypatch.setattr(core, "SCPFileDownloader", lambda settings: downloader)
 
     result = await create_app(client).call_tool("healthcheck", {})
 
@@ -218,10 +217,9 @@ async def test_app_healthcheck_returns_api_and_ftp_statuses(socket_enabled, monk
         "api_host": "router.test",
         "api_port": 8729,
         "api_tls": True,
-        "ftp_credentials_configured": True,
-        "ftp_host_override": True,
-        "ftp_port_override": False,
-        "ftp_tls_override": False,
+        "scp_credentials_configured": True,
+        "scp_host_override": True,
+        "scp_port_override": False,
         "resolved_host": "files.router.test",
     }
     assert result.structuredContent["api"] == {
@@ -235,32 +233,31 @@ async def test_app_healthcheck_returns_api_and_ftp_statuses(socket_enabled, monk
         "tls": True,
         "duration_ms": result.structuredContent["api"]["duration_ms"],
     }
-    assert result.structuredContent["ftp"] == {
+    assert result.structuredContent["scp"] == {
         "ok": True,
         "status": "ok",
-        "code": "ftp.ok",
-        "message": "FTP login and directory probe succeeded for files.router.test:21",
+        "code": "scp.ok",
+        "message": "SCP login and directory probe succeeded for files.router.test:21",
         "host": "files.router.test",
         "port": 21,
-        "tls": True,
         "probe": {
             "working_directory": "/",
             "listing_count": 2,
             "listing_sample": ["backups", "flash"],
-            "operation": "pwd+nlst",
+            "operation": "normalize+listdir_attr",
         },
-        "duration_ms": result.structuredContent["ftp"]["duration_ms"],
+        "duration_ms": result.structuredContent["scp"]["duration_ms"],
     }
     assert isinstance(result.structuredContent["api"]["duration_ms"], int)
-    assert isinstance(result.structuredContent["ftp"]["duration_ms"], int)
+    assert isinstance(result.structuredContent["scp"]["duration_ms"], int)
     assert "Healthcheck: healthy" in result.content[0].text
     assert "| status | healthy |" in result.content[0].text
     assert "| target-host | router.test |" in result.content[0].text
     assert "| api-status | ok |" in result.content[0].text
     assert "| api-code | api.ok |" in result.content[0].text
     assert "| api-name | lab-router |" in result.content[0].text
-    assert "| ftp-status | ok |" in result.content[0].text
-    assert "| ftp-probe | pwd+nlst |" in result.content[0].text
+    assert "| scp-status | ok |" in result.content[0].text
+    assert "| scp-probe | normalize+listdir_attr |" in result.content[0].text
     downloader.check_connection.assert_called_once_with()
 
 
@@ -691,7 +688,7 @@ def test_dns_resolve_propagates_router_errors() -> None:
         dns_resolve_impl(client, name="example.com")
 
 
-def test_healthcheck_reports_separate_api_and_ftp_statuses(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_healthcheck_reports_separate_api_and_scp_statuses(monkeypatch: pytest.MonkeyPatch) -> None:
     client = Mock(host="router.test")
     client.port = 8728
     client.use_ssl = False
@@ -700,19 +697,18 @@ def test_healthcheck_reports_separate_api_and_ftp_statuses(monkeypatch: pytest.M
     client.print.return_value = [{"name": "lab-router"}]
     monkeypatch.setenv("MIKROTIK_USER", "api-user")
     monkeypatch.setenv("MIKROTIK_PASSWORD", "api-pass")
-    monkeypatch.setenv("MIKROTIK_FTP_USER", "ftp-user")
-    monkeypatch.setenv("MIKROTIK_FTP_PASSWORD", "ftp-pass")
+    monkeypatch.setenv("MIKROTIK_SCP_USER", "scp-user")
+    monkeypatch.setenv("MIKROTIK_SCP_PASSWORD", "scp-pass")
 
     class Settings:
         host = "files.router.test"
         port = 21
-        use_tls = False
 
     downloader = Mock()
-    downloader.check_connection.side_effect = RouterFileDownloadError("ftp unavailable")
+    downloader.check_connection.side_effect = RouterFileDownloadError("scp unavailable")
 
     monkeypatch.setattr(core, "load_file_transfer_settings", lambda host: Settings())
-    monkeypatch.setattr(core, "FTPFileDownloader", lambda settings: downloader)
+    monkeypatch.setattr(core, "SCPFileDownloader", lambda settings: downloader)
 
     result = healthcheck_impl(client)
 
@@ -722,17 +718,16 @@ def test_healthcheck_reports_separate_api_and_ftp_statuses(monkeypatch: pytest.M
     assert result["config"]["api_host"] == "router.test"
     assert result["api"]["ok"] is True
     assert result["api"]["code"] == "api.ok"
-    assert result["ftp"] == {
+    assert result["scp"] == {
         "ok": False,
         "status": "failed",
-        "code": "ftp.error",
-        "message": "ftp unavailable",
+        "code": "scp.error",
+        "message": "scp unavailable",
         "host": "files.router.test",
         "port": 21,
-        "tls": False,
-        "duration_ms": result["ftp"]["duration_ms"],
+        "duration_ms": result["scp"]["duration_ms"],
     }
-    assert isinstance(result["ftp"]["duration_ms"], int)
+    assert isinstance(result["scp"]["duration_ms"], int)
 
 
 def test_healthcheck_marks_api_failure_without_raising(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -744,23 +739,22 @@ def test_healthcheck_marks_api_failure_without_raising(monkeypatch: pytest.Monke
     client.print.side_effect = RouterOSError("api unavailable")
     monkeypatch.setenv("MIKROTIK_USER", "api-user")
     monkeypatch.setenv("MIKROTIK_PASSWORD", "api-pass")
-    monkeypatch.setenv("MIKROTIK_FTP_USER", "ftp-user")
-    monkeypatch.setenv("MIKROTIK_FTP_PASSWORD", "ftp-pass")
+    monkeypatch.setenv("MIKROTIK_SCP_USER", "scp-user")
+    monkeypatch.setenv("MIKROTIK_SCP_PASSWORD", "scp-pass")
 
     class Settings:
         host = "files.router.test"
         port = 21
-        use_tls = True
 
     downloader = Mock()
     downloader.check_connection.return_value = {
         "working_directory": "/",
         "listing_count": 1,
         "listing_sample": ["backups"],
-        "operation": "pwd+nlst",
+            "operation": "normalize+listdir_attr",
     }
     monkeypatch.setattr(core, "load_file_transfer_settings", lambda host: Settings())
-    monkeypatch.setattr(core, "FTPFileDownloader", lambda settings: downloader)
+    monkeypatch.setattr(core, "SCPFileDownloader", lambda settings: downloader)
 
     result = healthcheck_impl(client)
 
@@ -776,26 +770,25 @@ def test_healthcheck_marks_api_failure_without_raising(monkeypatch: pytest.Monke
         "tls": True,
         "duration_ms": result["api"]["duration_ms"],
     }
-    assert result["ftp"] == {
+    assert result["scp"] == {
         "ok": True,
         "status": "ok",
-        "code": "ftp.ok",
-        "message": "FTP login and directory probe succeeded for files.router.test:21",
+        "code": "scp.ok",
+        "message": "SCP login and directory probe succeeded for files.router.test:21",
         "host": "files.router.test",
         "port": 21,
-        "tls": True,
         "probe": {
             "working_directory": "/",
             "listing_count": 1,
             "listing_sample": ["backups"],
-            "operation": "pwd+nlst",
+            "operation": "normalize+listdir_attr",
         },
-        "duration_ms": result["ftp"]["duration_ms"],
+        "duration_ms": result["scp"]["duration_ms"],
     }
     assert isinstance(result["api"]["duration_ms"], int)
 
 
-def test_healthcheck_classifies_api_auth_and_ftp_config_failures(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_healthcheck_classifies_api_auth_and_scp_config_failures(monkeypatch: pytest.MonkeyPatch) -> None:
     from mikrotik_mcp.client import RouterOSAuthError
 
     client = Mock(host="router.test")
@@ -806,8 +799,8 @@ def test_healthcheck_classifies_api_auth_and_ftp_config_failures(monkeypatch: py
     client.print.side_effect = RouterOSAuthError("bad login")
     monkeypatch.setenv("MIKROTIK_USER", "wrong")
     monkeypatch.setenv("MIKROTIK_PASSWORD", "bad")
-    monkeypatch.delenv("MIKROTIK_FTP_USER", raising=False)
-    monkeypatch.delenv("MIKROTIK_FTP_PASSWORD", raising=False)
+    monkeypatch.delenv("MIKROTIK_SCP_USER", raising=False)
+    monkeypatch.delenv("MIKROTIK_SCP_PASSWORD", raising=False)
 
     monkeypatch.setattr(core, "load_file_transfer_settings", Mock(side_effect=RuntimeError("must be set before downloading files")))
 
@@ -815,7 +808,7 @@ def test_healthcheck_classifies_api_auth_and_ftp_config_failures(monkeypatch: py
 
     assert result["status"] == "failed"
     assert result["api"]["code"] == "api.auth_failed"
-    assert result["ftp"]["code"] == "ftp.config_missing"
+    assert result["scp"]["code"] == "scp.config_missing"
 
 
 def test_interface_monitor_returns_first_record() -> None:
