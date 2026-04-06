@@ -6,7 +6,7 @@ Build the MikroTik MCP server in small, testable phases, starting with the narro
 
 ## Phase 1: Foundation + `resource_print`
 
-Start here.
+Status: done.
 
 Deliverables:
 
@@ -153,9 +153,9 @@ These apply in every phase:
 
 ## Recommended Immediate Next Steps
 
-1. Create `packages/mcp-server/` scaffold.
-2. Implement low-level RouterOS API encoding/decoding.
-3. Implement `/login`.
-4. Implement `print(...)` in the client.
-5. Implement `resource_print` with optional `jq_filter`.
-6. Add tests before expanding to mutation tools.
+1. Implement `resource_add`.
+2. Implement `resource_set`.
+3. Implement `resource_remove`.
+4. Implement `command_run`.
+5. Add tests for successful mutation and common RouterOS failures.
+6. Keep Phase 1 coverage passing while expanding to Phase 2.

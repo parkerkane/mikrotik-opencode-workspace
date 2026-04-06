@@ -1,0 +1,5 @@
+* text=auto eol=lf
+
+# Keep Windows scripts usable if added later
+*.bat text eol=crlf
+*.cmd text eol=crlf
