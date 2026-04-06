@@ -1,0 +1,12 @@
+Metadata-Version: 2.4
+Name: mikrotik-mcp-server
+Version: 0.1.0
+Summary: MCP server for MikroTik RouterOS
+Requires-Python: >=3.11
+Requires-Dist: jq<2,>=1
+Requires-Dist: mcp<2,>=1
+Requires-Dist: python-dotenv<2,>=1
+Provides-Extra: test
+Requires-Dist: pytest<9,>=8; extra == "test"
+Requires-Dist: pytest-asyncio<1,>=0.23; extra == "test"
+Requires-Dist: pytest-socket<1,>=0.7; extra == "test"

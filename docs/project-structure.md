@@ -103,16 +103,14 @@ Python 3.11+ is required.
 
 ```bash
 cd packages/mcp-server
-python -m venv .venv
-.venv/bin/pip install -e .
-.venv/bin/pytest
+pip install -e .
+pytest
 ```
 
 ## gitignore entries
 
 ```
 .env
-packages/mcp-server/.venv/
 __pycache__/
 .pytest_cache/
 ```

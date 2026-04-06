@@ -90,7 +90,7 @@ For composite tools such as backup collection, also mock local filesystem writes
 
 ```bash
 cd packages/mcp-server
-.venv/bin/pytest
+pytest
 ```
 
 ## Recommended Dependencies
