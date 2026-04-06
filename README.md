@@ -34,6 +34,8 @@ Implemented today:
 - RouterOS API enabled on the target router
 - workspace-root `.env` with credentials
 
+Use `.env.example` as the starting point for your local `.env`.
+
 Example `.env`:
 
 ```env
@@ -41,8 +43,31 @@ MIKROTIK_USER=admin
 MIKROTIK_PASSWORD=yourpassword
 MIKROTIK_API_SSL=true
 MIKROTIK_API_PORT=8729
-MIKROTIK_TLS_VERIFY=false
+MIKROTIK_TLS_VERIFY=true
+
+# Optional FTP overrides for file download and backup tools.
+MIKROTIK_FTP_HOST=
+MIKROTIK_FTP_USER=
+MIKROTIK_FTP_PASSWORD=
+MIKROTIK_FTP_PORT=21
+MIKROTIK_FTP_TLS=true
+MIKROTIK_FTP_TLS_VERIFY=true
+MIKROTIK_FTP_TIMEOUT=30.0
 ```
+
+Environment variables:
+- `MIKROTIK_USER`: required RouterOS API username
+- `MIKROTIK_PASSWORD`: required RouterOS API password
+- `MIKROTIK_API_SSL`: optional, `true` by default; set `false` for plain API on port `8728`
+- `MIKROTIK_API_PORT`: optional API port override; defaults to `8729` with TLS or `8728` without TLS
+- `MIKROTIK_TLS_VERIFY`: optional, `true` by default; set `false` for self-signed lab certificates
+- `MIKROTIK_FTP_HOST`: optional FTP host override; defaults to the router host passed on the command line
+- `MIKROTIK_FTP_USER`: optional FTP username override; falls back to `MIKROTIK_USER`
+- `MIKROTIK_FTP_PASSWORD`: optional FTP password override; falls back to `MIKROTIK_PASSWORD`
+- `MIKROTIK_FTP_PORT`: optional FTP port override; defaults to `21`
+- `MIKROTIK_FTP_TLS`: optional, `true` by default; used by file download and backup tools
+- `MIKROTIK_FTP_TLS_VERIFY`: optional, defaults to `MIKROTIK_TLS_VERIFY`
+- `MIKROTIK_FTP_TIMEOUT`: optional FTP timeout in seconds; defaults to `30.0`
 
 Notes:
 - `.env` is loaded from the repository root.
