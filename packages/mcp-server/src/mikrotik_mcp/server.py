@@ -12,6 +12,7 @@ from .tool_impls.access import (
     wireguard_peer_remove_impl,
 )
 from .tool_impls.core import (
+    command_cancel_impl,
     command_run_impl,
     dhcp_lease_list_impl,
     dhcp_network_list_impl,
@@ -25,6 +26,7 @@ from .tool_impls.core import (
     ip_route_get_impl,
     ip_route_list_impl,
     resource_add_impl,
+    resource_listen_impl,
     resource_print_impl,
     resource_remove_impl,
     resource_set_impl,
@@ -72,6 +74,7 @@ __all__ = [
     "bridge_vlan_add_impl",
     "bridge_vlan_list_impl",
     "bridge_vlan_remove_impl",
+    "command_cancel_impl",
     "command_run_impl",
     "create_app",
     "dhcp_lease_list_impl",
@@ -106,6 +109,7 @@ __all__ = [
     "ppp_secret_list_impl",
     "ppp_secret_remove_impl",
     "resource_add_impl",
+    "resource_listen_impl",
     "resource_print_impl",
     "resource_remove_impl",
     "resource_set_impl",

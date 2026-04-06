@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 import socket
 import ssl
 from typing import Any
+from uuid import uuid4
 
 
 class RouterOSError(RuntimeError):
@@ -29,6 +30,21 @@ class ReplyBundle:
     traps: list[dict[str, str]] = field(default_factory=list)
     fatal: dict[str, str] | None = None
     empty: bool = False
+    tag: str | None = None
+
+
+@dataclass(slots=True)
+class ListenResult:
+    tag: str
+    records: list[dict[str, str]] = field(default_factory=list)
+    done: dict[str, str] = field(default_factory=dict)
+    traps: list[dict[str, str]] = field(default_factory=list)
+    fatal: dict[str, str] | None = None
+    empty: bool = False
+    cancelled: bool = False
+    limit_reached: bool = False
+    cancel_done: dict[str, str] = field(default_factory=dict)
+    cancel_fatal: dict[str, str] | None = None
 
 
 def encode_length(length: int) -> bytes:
@@ -88,16 +104,9 @@ def parse_reply_sentences(sentences: list[list[str]]) -> ReplyBundle:
         if not sentence:
             continue
 
-        reply_type, *words = sentence
-        attrs: dict[str, str] = {}
-        for word in words:
-            if not word:
-                continue
-            if word.startswith("="):
-                key, _, value = word[1:].partition("=")
-                attrs[key] = value
-                continue
-            attrs[word] = ""
+        reply_type, attrs = parse_reply_sentence(sentence)
+        if bundle.tag is None:
+            bundle.tag = attrs.get(".tag")
 
         if reply_type == "!re":
             bundle.records.append(attrs)
@@ -111,6 +120,23 @@ def parse_reply_sentences(sentences: list[list[str]]) -> ReplyBundle:
             bundle.empty = True
 
     return bundle
+
+
+def parse_reply_sentence(sentence: list[str]) -> tuple[str, dict[str, str]]:
+    if not sentence:
+        raise ValueError("sentence must not be empty")
+
+    reply_type, *words = sentence
+    attrs: dict[str, str] = {}
+    for word in words:
+        if not word:
+            continue
+        if word.startswith("="):
+            key, _, value = word[1:].partition("=")
+            attrs[key] = value
+            continue
+        attrs[word] = ""
+    return reply_type, attrs
 
 
 class RouterOSClient:
@@ -210,29 +236,113 @@ class RouterOSClient:
         *,
         attrs: dict[str, Any] | None = None,
         queries: list[str] | None = None,
+        tag: str | None = None,
     ) -> list[dict[str, str]] | dict[str, str] | dict[str, bool]:
-        sentence = [_normalize_command_path(path)]
-        for key, value in _normalize_attrs(attrs).items():
-            sentence.append(f"={key}={value}")
-        for query in _normalize_queries(queries):
-            sentence.append(query)
-
+        sentence = self._build_command_sentence(path, attrs=attrs, queries=queries, tag=tag)
         reply = self.execute(sentence)
         self._raise_for_errors(reply)
         if reply.records:
             return reply.records
         return self._normalize_mutation_result(reply)
 
-    def command(self, path: str, attrs: dict[str, Any] | None = None) -> ReplyBundle:
-        normalized_path = _normalize_command_path(path)
-        sentence = [normalized_path]
+    def listen(
+        self,
+        menu: str,
+        *,
+        proplist: list[str] | None = None,
+        queries: list[str] | None = None,
+        attrs: dict[str, Any] | None = None,
+        tag: str | None = None,
+        max_events: int = 10,
+    ) -> ListenResult:
+        if max_events < 1:
+            raise ValueError("max_events must be at least 1")
+
+        listen_tag = _normalize_tag(tag) if tag is not None else self._generate_tag("listen")
+        cancel_tag = self._cancel_tag(listen_tag)
+        sentence = [f"{_normalize_menu(menu)}/listen"]
+        if proplist:
+            sentence.append(f"=.proplist={','.join(proplist)}")
         for key, value in _normalize_attrs(attrs).items():
             sentence.append(f"={key}={value}")
+        for query in _normalize_queries(queries):
+            sentence.append(query)
+        sentence.append(f"=.tag={listen_tag}")
+
+        result = ListenResult(tag=listen_tag)
+        self.write_sentence(sentence)
+
+        cancel_sent = False
+        listen_done = False
+        cancel_done = False
+        while True:
+            reply_type, reply_attrs = parse_reply_sentence(self.read_sentence())
+            reply_tag = reply_attrs.get(".tag")
+
+            if reply_tag == listen_tag:
+                if reply_type == "!re":
+                    result.records.append(reply_attrs)
+                    if len(result.records) >= max_events and not cancel_sent:
+                        result.limit_reached = True
+                        result.cancelled = True
+                        self.write_sentence(self._build_cancel_sentence(listen_tag, cancel_tag=cancel_tag))
+                        cancel_sent = True
+                elif reply_type == "!trap":
+                    result.traps.append(reply_attrs)
+                elif reply_type == "!done":
+                    result.done = reply_attrs
+                    listen_done = True
+                elif reply_type == "!fatal":
+                    result.fatal = reply_attrs
+                    listen_done = True
+                elif reply_type == "!empty":
+                    result.empty = True
+
+            if reply_tag == cancel_tag:
+                if reply_type == "!done":
+                    result.cancel_done = reply_attrs
+                    cancel_done = True
+                elif reply_type == "!fatal":
+                    result.cancel_fatal = reply_attrs
+                    cancel_done = True
+
+            if listen_done and (not cancel_sent or cancel_done):
+                break
+
+        if result.cancel_fatal:
+            raise RouterOSFatalError(result.cancel_fatal.get("message", "RouterOS cancel command ended unexpectedly"))
+        if result.fatal:
+            raise RouterOSFatalError(result.fatal.get("message", "RouterOS connection ended unexpectedly"))
+        return result
+
+    def cancel(self, tag: str) -> dict[str, str] | dict[str, bool]:
+        reply = self.execute(self._build_cancel_sentence(tag))
+        return self._normalize_mutation_result(reply)
+
+    def command(self, path: str, attrs: dict[str, Any] | None = None) -> ReplyBundle:
+        sentence = self._build_command_sentence(path, attrs=attrs)
 
         reply = self.execute(sentence)
         if reply.fatal:
             raise RouterOSFatalError(reply.fatal.get("message", "RouterOS connection ended unexpectedly"))
         return reply
+
+    def _build_command_sentence(
+        self,
+        path: str,
+        *,
+        attrs: dict[str, Any] | None = None,
+        queries: list[str] | None = None,
+        tag: str | None = None,
+    ) -> list[str]:
+        sentence = [_normalize_command_path(path)]
+        for key, value in _normalize_attrs(attrs).items():
+            sentence.append(f"={key}={value}")
+        for query in _normalize_queries(queries):
+            sentence.append(query)
+        if tag is not None:
+            sentence.append(f"=.tag={_normalize_tag(tag)}")
+        return sentence
 
     def execute(self, words: list[str]) -> ReplyBundle:
         if self._socket is None:
@@ -336,6 +446,18 @@ class RouterOSClient:
             sentence.append(f"={key}={value}")
         return sentence
 
+    def _build_cancel_sentence(self, tag: str, *, cancel_tag: str | None = None) -> list[str]:
+        sentence = ["/cancel", f"=tag={_normalize_tag(tag)}"]
+        if cancel_tag is not None:
+            sentence.append(f"=.tag={_normalize_tag(cancel_tag)}")
+        return sentence
+
+    def _cancel_tag(self, tag: str) -> str:
+        return f"{tag}-cancel"
+
+    def _generate_tag(self, prefix: str) -> str:
+        return f"{prefix}-{uuid4().hex[:12]}"
+
     @classmethod
     def _normalize_mutation_result(cls, reply: ReplyBundle) -> dict[str, str] | dict[str, bool]:
         cls._raise_for_errors(reply)
@@ -362,6 +484,15 @@ def _normalize_command_path(path: str) -> str:
     if not path or not path.strip():
         raise ValueError("command path is required")
     return "/" + path.strip().strip("/")
+
+
+def _normalize_tag(tag: str) -> str:
+    value = tag.strip()
+    if not value:
+        raise ValueError("tag is required")
+    if any(char.isspace() for char in value):
+        raise ValueError("tag must not contain whitespace")
+    return value
 
 
 def _normalize_queries(queries: list[str] | None) -> list[str]:

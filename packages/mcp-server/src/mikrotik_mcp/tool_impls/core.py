@@ -5,7 +5,13 @@ from typing import Any
 
 from ..client import RouterOSClient
 from ..filters import apply_jq_filter
-from ..server_helpers import build_equality_queries, print_records, print_single_record, require_exactly_one_locator
+from ..server_helpers import (
+    build_equality_queries,
+    normalize_required_string,
+    print_records,
+    print_single_record,
+    require_exactly_one_locator,
+)
 
 
 def resource_print_impl(
@@ -63,6 +69,46 @@ def command_run_impl(
         attrs=attributes,
         queries=list(queries) if queries is not None else None,
     )
+
+
+def resource_listen_impl(
+    client: RouterOSClient,
+    *,
+    menu: str,
+    proplist: Sequence[str] | None = None,
+    queries: Sequence[str] | None = None,
+    attributes: dict[str, Any] | None = None,
+    tag: str | None = None,
+    max_events: int = 10,
+) -> dict[str, Any]:
+    result = client.listen(
+        menu,
+        proplist=list(proplist) if proplist is not None else None,
+        queries=list(queries) if queries is not None else None,
+        attrs=attributes,
+        tag=tag,
+        max_events=max_events,
+    )
+    return {
+        "tag": result.tag,
+        "events": result.records,
+        "done": result.done or None,
+        "traps": result.traps,
+        "empty": result.empty,
+        "cancelled": result.cancelled,
+        "limit_reached": result.limit_reached,
+        "cancel_done": result.cancel_done or None,
+    }
+
+
+def command_cancel_impl(
+    client: RouterOSClient,
+    *,
+    tag: str,
+) -> dict[str, str] | dict[str, bool]:
+    normalized_tag = normalize_required_string(tag, field_name="tag")
+    result = client.cancel(normalized_tag)
+    return {"tag": normalized_tag, **result}
 
 
 def system_resource_get_impl(client: RouterOSClient) -> dict[str, str]:

@@ -58,6 +58,29 @@ def _register_core_tools(app: FastMCP, client: RouterOSClient) -> None:
     ) -> Any:
         return core.command_run_impl(client, command=command, attributes=attributes, queries=queries)
 
+    @app.tool(description="Listen for changes on a RouterOS menu and return a bounded batch of events.")
+    def resource_listen(
+        menu: str,
+        proplist: list[str] | None = None,
+        queries: list[str] | None = None,
+        attributes: dict[str, Any] | None = None,
+        tag: str | None = None,
+        max_events: int = 10,
+    ) -> dict[str, Any]:
+        return core.resource_listen_impl(
+            client,
+            menu=menu,
+            proplist=proplist,
+            queries=queries,
+            attributes=attributes,
+            tag=tag,
+            max_events=max_events,
+        )
+
+    @app.tool(description="Cancel a tagged long-running RouterOS API command.")
+    def command_cancel(tag: str) -> dict[str, str] | dict[str, bool]:
+        return core.command_cancel_impl(client, tag=tag)
+
     @app.tool(description="Get RouterOS system resource details.")
     def system_resource_get() -> dict[str, str]:
         return core.system_resource_get_impl(client)

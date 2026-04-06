@@ -44,6 +44,19 @@ def test_parse_reply_sentences_collects_records_and_done() -> None:
     assert reply.fatal is None
 
 
+def test_parse_reply_sentences_preserves_tag_metadata() -> None:
+    reply = parse_reply_sentences(
+        [
+            ["!re", "=.tag=listen-1", "=name=ether1"],
+            ["!done", "=.tag=listen-1", "=ret=ok"],
+        ]
+    )
+
+    assert reply.tag == "listen-1"
+    assert reply.records == [{".tag": "listen-1", "name": "ether1"}]
+    assert reply.done == {".tag": "listen-1", "ret": "ok"}
+
+
 def test_print_builds_sentence_and_returns_records(client: RouterOSClient, fake_socket) -> None:
     fake_socket.response_bytes.extend(
         client.encode_sentence(["!re", "=.id=*1", "=name=ether1", "=disabled=false"])
@@ -155,6 +168,74 @@ def test_command_run_returns_done_payload_without_records(client: RouterOSClient
     result = client.run("system/reboot")
 
     assert result == {"ret": "ok"}
+
+
+def test_command_run_supports_explicit_tag(client: RouterOSClient, fake_socket) -> None:
+    fake_socket.response_bytes.extend(client.encode_sentence(["!done", "=.tag=ping-1", "=ret=ok"]))
+    client._socket = fake_socket
+
+    result = client.run("tool/ping", attrs={"address": "192.0.2.1"}, tag="ping-1")
+
+    assert result == {".tag": "ping-1", "ret": "ok"}
+    assert bytes(fake_socket.sent) == client.encode_sentence(
+        [
+            "/tool/ping",
+            "=address=192.0.2.1",
+            "=.tag=ping-1",
+        ]
+    )
+
+
+def test_listen_returns_bounded_records_and_cancels_by_tag(client: RouterOSClient, fake_socket) -> None:
+    fake_socket.response_bytes.extend(client.encode_sentence(["!re", "=.tag=listen-1", "=name=ether1"]))
+    fake_socket.response_bytes.extend(client.encode_sentence(["!re", "=.tag=listen-1", "=name=ether2"]))
+    fake_socket.response_bytes.extend(client.encode_sentence(["!done", "=.tag=listen-1-cancel", "=ret=interrupted"]))
+    fake_socket.response_bytes.extend(client.encode_sentence(["!done", "=.tag=listen-1"]))
+    client._socket = fake_socket
+
+    result = client.listen("/interface", queries=["running=true"], tag="listen-1", max_events=2)
+
+    assert result.tag == "listen-1"
+    assert result.records == [
+        {".tag": "listen-1", "name": "ether1"},
+        {".tag": "listen-1", "name": "ether2"},
+    ]
+    assert result.cancelled is True
+    assert result.limit_reached is True
+    assert result.cancel_done == {".tag": "listen-1-cancel", "ret": "interrupted"}
+    assert bytes(fake_socket.sent) == client.encode_sentence(
+        [
+            "/interface/listen",
+            "?running=true",
+            "=.tag=listen-1",
+        ]
+    ) + client.encode_sentence(
+        [
+            "/cancel",
+            "=tag=listen-1",
+            "=.tag=listen-1-cancel",
+        ]
+    )
+
+
+def test_listen_requires_positive_max_events(client: RouterOSClient) -> None:
+    with pytest.raises(ValueError, match="max_events must be at least 1"):
+        client.listen("/interface", max_events=0)
+
+
+def test_cancel_builds_cancel_sentence(client: RouterOSClient, fake_socket) -> None:
+    fake_socket.response_bytes.extend(client.encode_sentence(["!done", "=ret=ok"]))
+    client._socket = fake_socket
+
+    result = client.cancel("listen-1")
+
+    assert result == {"ret": "ok"}
+    assert bytes(fake_socket.sent) == client.encode_sentence(
+        [
+            "/cancel",
+            "=tag=listen-1",
+        ]
+    )
 
 
 def test_read_word_falls_back_to_latin1_for_non_utf8_router_data(client: RouterOSClient, fake_socket) -> None:

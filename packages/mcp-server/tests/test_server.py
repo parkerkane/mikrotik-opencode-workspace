@@ -5,6 +5,7 @@ from unittest.mock import Mock
 
 import pytest
 
+from mikrotik_mcp.client import ListenResult
 from mikrotik_mcp.downloads import RouterFileDownloadError
 from mikrotik_mcp import server_helpers
 from mikrotik_mcp.tool_impls import files as file_tool_impls
@@ -18,6 +19,7 @@ from mikrotik_mcp.server import (
     bridge_vlan_add_impl,
     bridge_vlan_list_impl,
     bridge_vlan_remove_impl,
+    command_cancel_impl,
     command_run_impl,
     dhcp_lease_list_impl,
     dhcp_network_list_impl,
@@ -49,6 +51,7 @@ from mikrotik_mcp.server import (
     ppp_secret_list_impl,
     ppp_secret_remove_impl,
     resource_add_impl,
+    resource_listen_impl,
     resource_print_impl,
     resource_remove_impl,
     resource_set_impl,
@@ -180,6 +183,57 @@ def test_command_run_calls_client_and_returns_normalized_output() -> None:
         attrs={"address": "192.0.2.1", "count": 1},
         queries=["status=reachable"],
     )
+
+
+def test_resource_listen_calls_client_and_returns_bounded_payload() -> None:
+    client = Mock()
+    client.listen.return_value = ListenResult(
+        tag="listen-1",
+        records=[{"name": "ether1"}],
+        done={"ret": "ok"},
+        cancelled=True,
+        limit_reached=True,
+        cancel_done={"ret": "interrupted"},
+    )
+
+    result = resource_listen_impl(
+        client,
+        menu="/interface",
+        proplist=["name"],
+        queries=["running=true"],
+        attributes={"once": False},
+        tag="listen-1",
+        max_events=1,
+    )
+
+    assert result == {
+        "tag": "listen-1",
+        "events": [{"name": "ether1"}],
+        "done": {"ret": "ok"},
+        "traps": [],
+        "empty": False,
+        "cancelled": True,
+        "limit_reached": True,
+        "cancel_done": {"ret": "interrupted"},
+    }
+    client.listen.assert_called_once_with(
+        "/interface",
+        proplist=["name"],
+        queries=["running=true"],
+        attrs={"once": False},
+        tag="listen-1",
+        max_events=1,
+    )
+
+
+def test_command_cancel_calls_client_and_returns_requested_tag() -> None:
+    client = Mock()
+    client.cancel.return_value = {"success": True}
+
+    result = command_cancel_impl(client, tag="listen-1")
+
+    assert result == {"tag": "listen-1", "success": True}
+    client.cancel.assert_called_once_with("listen-1")
 
 
 def test_system_resource_get_returns_single_record() -> None:
