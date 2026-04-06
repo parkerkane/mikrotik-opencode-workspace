@@ -186,13 +186,3 @@ Current phases expose these MCP tools:
 `jq_filter` is applied only after RouterOS replies have been normalized into Python JSON-like data.
 
 `resource_listen` and `tool_ping` run on short-lived cloned RouterOS connections so bounded long-running operations do not interfere with the MCP server's shared session socket. `command_cancel` is available as a low-level primitive, but true cross-call session cancellation is not implemented yet.
-
-## Next
-
-Phase 7 is next:
-
-- response formatting tightening
-- explicit Markdown/table presentation for common operational outputs
-- stable rendering rules for empty values and boolean-like fields
-
-See `docs/implementation-phases.md` for the full roadmap.
