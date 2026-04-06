@@ -18,3 +18,7 @@ build/
 # Local backup artifacts
 backups/
 exports
+
+# Local custom CA certificates
+certs/**
+!certs/README.md

@@ -17,6 +17,8 @@ from __future__ import annotations
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+import hashlib
+from pathlib import Path
 import socket
 import ssl
 from typing import Any
@@ -169,6 +171,7 @@ class RouterOSClient:
         port: int | None = None,
         use_ssl: bool = False,
         tls_verify: bool = True,
+        tls_ca_files: tuple[str, ...] = (),
         timeout: float = 10.0,
     ) -> None:
         self.host = host
@@ -177,6 +180,7 @@ class RouterOSClient:
         self.port = port or (8729 if use_ssl else 8728)
         self.use_ssl = use_ssl
         self.tls_verify = tls_verify
+        self.tls_ca_files = tls_ca_files
         self.timeout = timeout
         self._socket: socket.socket | ssl.SSLSocket | None = None
 
@@ -186,7 +190,10 @@ class RouterOSClient:
             raw_socket.settimeout(self.timeout)
             if self.use_ssl:
                 context = ssl.create_default_context()
-                if not self.tls_verify:
+                if self.tls_verify:
+                    for cert_file in self.tls_ca_files:
+                        context.load_verify_locations(cafile=str(Path(cert_file)))
+                else:
                     context.check_hostname = False
                     context.verify_mode = ssl.CERT_NONE
                 self._socket = context.wrap_socket(raw_socket, server_hostname=self.host if self.tls_verify else None)
@@ -194,7 +201,7 @@ class RouterOSClient:
                 self._socket = raw_socket
         except ssl.SSLError as exc:
             raise RouterOSTransportError(
-                f"TLS connection to {self.host}:{self.port} failed. For self-signed lab certs, set MIKROTIK_TLS_VERIFY=false. {exc}"
+                f"TLS connection to {self.host}:{self.port} failed. Place trusted CA certs in certs/ or set MIKROTIK_TLS_VERIFY=false for self-signed lab certs. {exc}"
             ) from exc
         except OSError as exc:
             raise RouterOSTransportError(f"Failed to connect to {self.host}:{self.port}: {exc}") from exc
@@ -216,6 +223,7 @@ class RouterOSClient:
             port=self.port,
             use_ssl=self.use_ssl,
             tls_verify=self.tls_verify,
+            tls_ca_files=self.tls_ca_files,
             timeout=self.timeout,
         )
 
@@ -236,6 +244,30 @@ class RouterOSClient:
             raise RouterOSAuthError(f"RouterOS login failed for user '{self.username}': {message}")
         if reply.fatal:
             raise RouterOSFatalError(reply.fatal.get("message", "RouterOS connection ended during login"))
+
+    def tls_session_info(self) -> dict[str, Any] | None:
+        if not self.use_ssl or self._socket is None or not hasattr(self._socket, "getpeercert"):
+            return None
+
+        certificate = self._socket.getpeercert()
+        if not certificate:
+            return None
+
+        der_certificate = self._socket.getpeercert(binary_form=True)
+        cipher = self._socket.cipher()
+        return {
+            "subject": _distinguished_name(certificate.get("subject")),
+            "issuer": _distinguished_name(certificate.get("issuer")),
+            "serial_number": certificate.get("serialNumber"),
+            "not_before": certificate.get("notBefore"),
+            "not_after": certificate.get("notAfter"),
+            "subject_alt_names": [value for kind, value in certificate.get("subjectAltName", ()) if kind == "DNS"],
+            "sha256_fingerprint": hashlib.sha256(der_certificate).hexdigest().upper() if der_certificate else None,
+            "tls_version": self._socket.version() if hasattr(self._socket, "version") else None,
+            "cipher": cipher[0] if cipher else None,
+            "cipher_bits": cipher[2] if cipher and len(cipher) > 2 else None,
+            "hostname_verified": self.tls_verify,
+        }
 
     def print(
         self,
@@ -515,6 +547,17 @@ class RouterOSClient:
         if reply.empty:
             return {"success": True, "empty": True}
         return {"success": True}
+
+
+def _distinguished_name(parts: Any) -> str | None:
+    if not parts:
+        return None
+
+    attributes: list[str] = []
+    for entry in parts:
+        for key, value in entry:
+            attributes.append(f"{key}={value}")
+    return ", ".join(attributes) if attributes else None
 
 
 def _normalize_menu(menu: str) -> str:

@@ -55,7 +55,7 @@ Environment variables:
 - `MIKROTIK_PASSWORD`: required RouterOS API password
 - `MIKROTIK_API_SSL`: optional, `true` by default; set `false` for plain API on port `8728`
 - `MIKROTIK_API_PORT`: optional API port override; defaults to `8729` with TLS or `8728` without TLS
-- `MIKROTIK_TLS_VERIFY`: optional, `true` by default; set `false` for self-signed lab certificates
+- `MIKROTIK_TLS_VERIFY`: optional, `true` by default; set `false` for self-signed lab certificates when you do not want to trust local CA certs from `certs/`
 - `MIKROTIK_SCP_HOST`: optional SCP host override; defaults to the router host passed on the command line
 - `MIKROTIK_SCP_USER`: optional SCP username override; falls back to `MIKROTIK_USER`
 - `MIKROTIK_SCP_PASSWORD`: optional SCP password override; falls back to `MIKROTIK_PASSWORD`
@@ -66,6 +66,8 @@ Notes:
 - `.env` is loaded from the repository root.
 - TLS is enabled by default.
 - Default port is `8729` when SSL is enabled, otherwise `8728`.
+- When `certs/` exists, `.pem`, `.crt`, and `.cer` files in it are loaded into the TLS trust store except names ending with `.disabled`.
+- `certs/` is for local PEM CA certificates only; only `certs/README.md` is tracked by git.
 
 ## Setup
 

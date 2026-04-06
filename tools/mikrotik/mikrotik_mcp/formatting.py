@@ -167,6 +167,7 @@ def format_healthcheck_result(record: dict[str, Any]) -> CallToolResult:
     api = record.get("api") if isinstance(record.get("api"), dict) else {}
     scp = record.get("scp") if isinstance(record.get("scp"), dict) else {}
     identity = api.get("identity") if isinstance(api.get("identity"), dict) else {}
+    certificate = api.get("certificate") if isinstance(api.get("certificate"), dict) else {}
     config = record.get("config") if isinstance(record.get("config"), dict) else {}
     scp_probe = scp.get("probe") if isinstance(scp.get("probe"), dict) else {}
 
@@ -182,6 +183,11 @@ def format_healthcheck_result(record: dict[str, Any]) -> CallToolResult:
         "api-host": api.get("host"),
         "api-port": api.get("port"),
         "api-tls": api.get("tls"),
+        "api-tls-version": certificate.get("tls_version"),
+        "api-tls-cipher": certificate.get("cipher"),
+        "api-cert-subject": certificate.get("subject"),
+        "api-cert-issuer": certificate.get("issuer"),
+        "api-cert-not-after": certificate.get("not_after"),
         "api-duration-ms": api.get("duration_ms"),
         "scp-status": scp.get("status") or ("ok" if scp.get("ok") else "failed"),
         "scp-code": scp.get("code"),
@@ -214,6 +220,11 @@ def format_healthcheck_result(record: dict[str, Any]) -> CallToolResult:
                 "api-host",
                 "api-port",
                 "api-tls",
+                "api-tls-version",
+                "api-tls-cipher",
+                "api-cert-subject",
+                "api-cert-issuer",
+                "api-cert-not-after",
                 "api-duration-ms",
                 "scp-status",
                 "scp-code",

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from io import BytesIO
+import ssl
 from unittest.mock import Mock, call
 
 import pytest
@@ -329,6 +330,7 @@ def test_cancel_builds_cancel_sentence(client: RouterOSClient, fake_socket) -> N
 
 
 def test_clone_copies_connection_settings(client: RouterOSClient) -> None:
+    client.tls_ca_files = ("/tmp/router-ca.pem",)
     cloned = client.clone()
 
     assert cloned is not client
@@ -338,7 +340,115 @@ def test_clone_copies_connection_settings(client: RouterOSClient) -> None:
     assert cloned.port == client.port
     assert cloned.use_ssl == client.use_ssl
     assert cloned.tls_verify == client.tls_verify
+    assert cloned.tls_ca_files == client.tls_ca_files
     assert cloned.timeout == client.timeout
+
+
+def test_connect_loads_active_custom_ca_files(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = RouterOSClient(
+        "router.test",
+        "admin",
+        "secret",
+        use_ssl=True,
+        tls_verify=True,
+        tls_ca_files=("/work/certs/router-ca.pem", "/work/certs/lab-root.crt"),
+    )
+    raw_socket = Mock()
+    context = Mock()
+    wrapped_socket = Mock()
+    context.wrap_socket.return_value = wrapped_socket
+
+    monkeypatch.setattr("mikrotik_mcp.client.socket.create_connection", Mock(return_value=raw_socket))
+    monkeypatch.setattr("mikrotik_mcp.client.ssl.create_default_context", Mock(return_value=context))
+
+    client.connect()
+
+    raw_socket.settimeout.assert_called_once_with(client.timeout)
+    assert context.load_verify_locations.call_args_list == [
+        call(cafile="/work/certs/router-ca.pem"),
+        call(cafile="/work/certs/lab-root.crt"),
+    ]
+    context.wrap_socket.assert_called_once_with(raw_socket, server_hostname="router.test")
+    assert client._socket is wrapped_socket
+
+
+def test_connect_skips_custom_ca_loading_when_tls_verify_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = RouterOSClient(
+        "router.test",
+        "admin",
+        "secret",
+        use_ssl=True,
+        tls_verify=False,
+        tls_ca_files=("/work/certs/router-ca.pem",),
+    )
+    raw_socket = Mock()
+    context = Mock()
+    wrapped_socket = Mock()
+    context.wrap_socket.return_value = wrapped_socket
+
+    monkeypatch.setattr("mikrotik_mcp.client.socket.create_connection", Mock(return_value=raw_socket))
+    monkeypatch.setattr("mikrotik_mcp.client.ssl.create_default_context", Mock(return_value=context))
+
+    client.connect()
+
+    context.load_verify_locations.assert_not_called()
+    assert context.check_hostname is False
+    assert context.verify_mode == ssl.CERT_NONE
+    context.wrap_socket.assert_called_once_with(raw_socket, server_hostname=None)
+
+
+def test_connect_wraps_tls_failures_with_custom_ca_hint(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = RouterOSClient("router.test", "admin", "secret", use_ssl=True)
+    raw_socket = Mock()
+    context = Mock()
+    context.wrap_socket.side_effect = ssl.SSLError("bad certificate")
+
+    monkeypatch.setattr("mikrotik_mcp.client.socket.create_connection", Mock(return_value=raw_socket))
+    monkeypatch.setattr("mikrotik_mcp.client.ssl.create_default_context", Mock(return_value=context))
+
+    with pytest.raises(RouterOSTransportError, match=r"Place trusted CA certs in certs/ or set MIKROTIK_TLS_VERIFY=false"):
+        client.connect()
+
+
+def test_tls_session_info_returns_normalized_certificate_details() -> None:
+    client = RouterOSClient("router.test", "admin", "secret", use_ssl=True)
+    tls_socket = Mock()
+    tls_socket.getpeercert.side_effect = [
+        {
+            "subject": ((("commonName", "Router"),), (("organizationName", "Reunanen.eu"),)),
+            "issuer": ((('commonName', 'Router CA'),),),
+            "serialNumber": "ABCD1234",
+            "notBefore": "Apr  6 15:39:31 2026 GMT",
+            "notAfter": "Apr  3 15:39:31 2036 GMT",
+            "subjectAltName": (("DNS", "router.local"), ("DNS", "router.test"), ("IP Address", "192.0.2.1")),
+        },
+        b"router-cert-der",
+    ]
+    tls_socket.version.return_value = "TLSv1.2"
+    tls_socket.cipher.return_value = ("ECDHE-RSA-AES256-GCM-SHA384", "TLSv1.2", 256)
+    client._socket = tls_socket
+
+    result = client.tls_session_info()
+
+    assert result == {
+        "subject": "commonName=Router, organizationName=Reunanen.eu",
+        "issuer": "commonName=Router CA",
+        "serial_number": "ABCD1234",
+        "not_before": "Apr  6 15:39:31 2026 GMT",
+        "not_after": "Apr  3 15:39:31 2036 GMT",
+        "subject_alt_names": ["router.local", "router.test"],
+        "sha256_fingerprint": "2175E1A111D3EFF1F27CE29A0B256D161A80245AEF0918C1B13DEAD2B402B401",
+        "tls_version": "TLSv1.2",
+        "cipher": "ECDHE-RSA-AES256-GCM-SHA384",
+        "cipher_bits": 256,
+        "hostname_verified": True,
+    }
+
+
+def test_tls_session_info_returns_none_for_plain_socket(client: RouterOSClient) -> None:
+    client._socket = Mock(spec=object)
+
+    assert client.tls_session_info() is None
 
 
 def test_isolated_opens_and_closes_cloned_client(client: RouterOSClient) -> None:

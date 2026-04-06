@@ -322,6 +322,8 @@ def healthcheck_impl(client: RouterOSClient) -> dict[str, Any]:
     api_started_at = perf_counter()
     try:
         identity = system_identity_get_impl(client)
+        tls_session_info = getattr(client, "tls_session_info", None)
+        certificate = tls_session_info() if callable(tls_session_info) else None
         api_result: dict[str, Any] = {
             "ok": True,
             "status": "ok",
@@ -332,6 +334,8 @@ def healthcheck_impl(client: RouterOSClient) -> dict[str, Any]:
             "port": client.port,
             "tls": client.use_ssl,
         }
+        if isinstance(certificate, dict) and certificate:
+            api_result["certificate"] = certificate
     except Exception as exc:
         api_result = {
             "ok": False,

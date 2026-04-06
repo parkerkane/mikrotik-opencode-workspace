@@ -24,6 +24,22 @@ from .client import RouterOSClient
 from .server_helpers import parse_bool, workspace_root
 
 
+CERTIFICATE_EXTENSIONS = {".pem", ".crt", ".cer"}
+
+
+def load_tls_ca_files() -> tuple[str, ...]:
+    certs_dir = workspace_root() / "certs"
+    if not certs_dir.is_dir():
+        return ()
+
+    cert_files = [
+        path
+        for path in sorted(certs_dir.iterdir())
+        if path.is_file() and path.suffix.lower() in CERTIFICATE_EXTENSIONS and not path.name.endswith(".disabled")
+    ]
+    return tuple(str(path) for path in cert_files)
+
+
 def load_settings(host: str) -> RouterOSClient:
     load_dotenv(workspace_root() / ".env")
 
@@ -35,6 +51,7 @@ def load_settings(host: str) -> RouterOSClient:
     use_ssl = parse_bool(os.getenv("MIKROTIK_API_SSL"), default=True)
     tls_verify = parse_bool(os.getenv("MIKROTIK_TLS_VERIFY"), default=True)
     port = int(os.getenv("MIKROTIK_API_PORT") or (8729 if use_ssl else 8728))
+    tls_ca_files = load_tls_ca_files()
 
     return RouterOSClient(
         host,
@@ -43,6 +60,7 @@ def load_settings(host: str) -> RouterOSClient:
         port=port,
         use_ssl=use_ssl,
         tls_verify=tls_verify,
+        tls_ca_files=tls_ca_files,
     )
 
 

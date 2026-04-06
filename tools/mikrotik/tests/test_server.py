@@ -186,6 +186,19 @@ async def test_app_healthcheck_returns_api_and_scp_statuses(socket_enabled, monk
     client.username = "api-user"
     client.password = "api-pass"
     client.print.return_value = [{"name": "lab-router"}]
+    client.tls_session_info = lambda: {
+        "subject": "commonName=Router",
+        "issuer": "commonName=Router CA",
+        "serial_number": "ABCD1234",
+        "not_before": "Apr  6 15:39:31 2026 GMT",
+        "not_after": "Apr  3 15:39:31 2036 GMT",
+        "subject_alt_names": ["router.test"],
+        "sha256_fingerprint": "FINGERPRINT",
+        "tls_version": "TLSv1.2",
+        "cipher": "ECDHE-RSA-AES256-GCM-SHA384",
+        "cipher_bits": 256,
+        "hostname_verified": True,
+    }
     monkeypatch.setenv("MIKROTIK_USER", "api-user")
     monkeypatch.setenv("MIKROTIK_PASSWORD", "api-pass")
     monkeypatch.setenv("MIKROTIK_SCP_USER", "scp-user")
@@ -231,6 +244,19 @@ async def test_app_healthcheck_returns_api_and_scp_statuses(socket_enabled, monk
         "host": "router.test",
         "port": 8729,
         "tls": True,
+        "certificate": {
+            "subject": "commonName=Router",
+            "issuer": "commonName=Router CA",
+            "serial_number": "ABCD1234",
+            "not_before": "Apr  6 15:39:31 2026 GMT",
+            "not_after": "Apr  3 15:39:31 2036 GMT",
+            "subject_alt_names": ["router.test"],
+            "sha256_fingerprint": "FINGERPRINT",
+            "tls_version": "TLSv1.2",
+            "cipher": "ECDHE-RSA-AES256-GCM-SHA384",
+            "cipher_bits": 256,
+            "hostname_verified": True,
+        },
         "duration_ms": result.structuredContent["api"]["duration_ms"],
     }
     assert result.structuredContent["scp"] == {
@@ -256,6 +282,9 @@ async def test_app_healthcheck_returns_api_and_scp_statuses(socket_enabled, monk
     assert "| api-status | ok |" in result.content[0].text
     assert "| api-code | api.ok |" in result.content[0].text
     assert "| api-name | lab-router |" in result.content[0].text
+    assert "| api-tls-version | TLSv1.2 |" in result.content[0].text
+    assert "| api-cert-subject | commonName=Router |" in result.content[0].text
+    assert "| api-cert-not-after | Apr  3 15:39:31 2036 GMT |" in result.content[0].text
     assert "| scp-status | ok |" in result.content[0].text
     assert "| scp-probe | normalize+listdir_attr |" in result.content[0].text
     downloader.check_connection.assert_called_once_with()
@@ -695,6 +724,7 @@ def test_healthcheck_reports_separate_api_and_scp_statuses(monkeypatch: pytest.M
     client.username = "api-user"
     client.password = "api-pass"
     client.print.return_value = [{"name": "lab-router"}]
+    client.tls_session_info = lambda: None
     monkeypatch.setenv("MIKROTIK_USER", "api-user")
     monkeypatch.setenv("MIKROTIK_PASSWORD", "api-pass")
     monkeypatch.setenv("MIKROTIK_SCP_USER", "scp-user")
@@ -718,6 +748,7 @@ def test_healthcheck_reports_separate_api_and_scp_statuses(monkeypatch: pytest.M
     assert result["config"]["api_host"] == "router.test"
     assert result["api"]["ok"] is True
     assert result["api"]["code"] == "api.ok"
+    assert "certificate" not in result["api"]
     assert result["scp"] == {
         "ok": False,
         "status": "failed",
@@ -737,6 +768,7 @@ def test_healthcheck_marks_api_failure_without_raising(monkeypatch: pytest.Monke
     client.username = "api-user"
     client.password = "api-pass"
     client.print.side_effect = RouterOSError("api unavailable")
+    client.tls_session_info = lambda: {"subject": "commonName=Router"}
     monkeypatch.setenv("MIKROTIK_USER", "api-user")
     monkeypatch.setenv("MIKROTIK_PASSWORD", "api-pass")
     monkeypatch.setenv("MIKROTIK_SCP_USER", "scp-user")
