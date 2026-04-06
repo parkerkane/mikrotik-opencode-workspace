@@ -383,7 +383,7 @@ class RouterOSClient:
 
     def execute(self, words: list[str]) -> ReplyBundle:
         if self._socket is None:
-            raise RouterOSTransportError("RouterOS socket is not connected")
+            self.open()
 
         self.write_sentence(words)
         sentences: list[list[str]] = []

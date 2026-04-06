@@ -6,10 +6,12 @@ from unittest.mock import MagicMock, Mock
 import pytest
 
 from mikrotik_mcp.app import create_app
+from mikrotik_mcp import runtime
 from mikrotik_mcp.client import ListenResult, RouterOSError
 from mikrotik_mcp.downloads import RouterFileDownloadError
 from mikrotik_mcp import server_helpers
 from mikrotik_mcp.tool_impls import files as file_tool_impls
+from mikrotik_mcp.tool_impls import core
 from mikrotik_mcp.server import (
     bridge_add_impl,
     bridge_list_impl,
@@ -28,6 +30,7 @@ from mikrotik_mcp.server import (
     dns_get_impl,
     dns_resolve_impl,
     dns_set_impl,
+    healthcheck_impl,
     firewall_address_list_add_impl,
     firewall_address_list_list_impl,
     firewall_address_list_remove_impl,
@@ -101,6 +104,20 @@ def isolated_client_mock(inner_client: Mock) -> MagicMock:
     return isolated
 
 
+def test_runtime_main_starts_server_without_eager_api_login(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = Mock()
+    app = Mock()
+
+    monkeypatch.setattr(runtime, "load_settings", lambda host: client)
+    monkeypatch.setattr(runtime, "create_app", lambda loaded_client: app)
+
+    runtime.main(["router.local"])
+
+    client.open.assert_not_called()
+    app.run.assert_called_once_with(transport="stdio")
+    client.close.assert_called_once_with()
+
+
 @pytest.mark.asyncio
 async def test_app_system_resource_get_returns_markdown_and_structured_content(socket_enabled) -> None:
     client = Mock()
@@ -159,6 +176,92 @@ async def test_app_dns_get_returns_summary_line_and_structured_content(socket_en
     assert result.structuredContent == client.print.return_value[0]
     assert "DNS settings: servers 1.1.1.1,8.8.8.8, remote requests yes" in result.content[0].text
     assert "| servers | 1.1.1.1,8.8.8.8 |" in result.content[0].text
+
+
+@pytest.mark.asyncio
+async def test_app_healthcheck_returns_api_and_ftp_statuses(socket_enabled, monkeypatch: pytest.MonkeyPatch) -> None:
+    client = Mock(host="router.test")
+    client.port = 8729
+    client.use_ssl = True
+    client.username = "api-user"
+    client.password = "api-pass"
+    client.print.return_value = [{"name": "lab-router"}]
+    monkeypatch.setenv("MIKROTIK_USER", "api-user")
+    monkeypatch.setenv("MIKROTIK_PASSWORD", "api-pass")
+    monkeypatch.setenv("MIKROTIK_FTP_USER", "ftp-user")
+    monkeypatch.setenv("MIKROTIK_FTP_PASSWORD", "ftp-pass")
+    monkeypatch.setenv("MIKROTIK_FTP_HOST", "files.router.test")
+
+    class Settings:
+        host = "files.router.test"
+        port = 21
+        use_tls = True
+
+    downloader = Mock()
+    downloader.check_connection.return_value = {
+        "working_directory": "/",
+        "listing_count": 2,
+        "listing_sample": ["backups", "flash"],
+        "operation": "pwd+nlst",
+    }
+    monkeypatch.setattr(core, "load_file_transfer_settings", lambda host: Settings())
+    monkeypatch.setattr(core, "FTPFileDownloader", lambda settings: downloader)
+
+    result = await create_app(client).call_tool("healthcheck", {})
+
+    assert result.structuredContent["success"] is True
+    assert result.structuredContent["status"] == "healthy"
+    assert result.structuredContent["target_host"] == "router.test"
+    assert result.structuredContent["timestamp"].endswith("Z")
+    assert result.structuredContent["config"] == {
+        "api_credentials_configured": True,
+        "api_host": "router.test",
+        "api_port": 8729,
+        "api_tls": True,
+        "ftp_credentials_configured": True,
+        "ftp_host_override": True,
+        "ftp_port_override": False,
+        "ftp_tls_override": False,
+        "resolved_host": "files.router.test",
+    }
+    assert result.structuredContent["api"] == {
+        "ok": True,
+        "status": "ok",
+        "code": "api.ok",
+        "message": "RouterOS API returned system identity",
+        "identity": {"name": "lab-router"},
+        "host": "router.test",
+        "port": 8729,
+        "tls": True,
+        "duration_ms": result.structuredContent["api"]["duration_ms"],
+    }
+    assert result.structuredContent["ftp"] == {
+        "ok": True,
+        "status": "ok",
+        "code": "ftp.ok",
+        "message": "FTP login and directory probe succeeded for files.router.test:21",
+        "host": "files.router.test",
+        "port": 21,
+        "tls": True,
+        "probe": {
+            "working_directory": "/",
+            "listing_count": 2,
+            "listing_sample": ["backups", "flash"],
+            "operation": "pwd+nlst",
+        },
+        "duration_ms": result.structuredContent["ftp"]["duration_ms"],
+    }
+    assert isinstance(result.structuredContent["api"]["duration_ms"], int)
+    assert isinstance(result.structuredContent["ftp"]["duration_ms"], int)
+    assert "Healthcheck: healthy" in result.content[0].text
+    assert "| status | healthy |" in result.content[0].text
+    assert "| target-host | router.test |" in result.content[0].text
+    assert "| api-status | ok |" in result.content[0].text
+    assert "| api-code | api.ok |" in result.content[0].text
+    assert "| api-name | lab-router |" in result.content[0].text
+    assert "| ftp-status | ok |" in result.content[0].text
+    assert "| ftp-probe | pwd+nlst |" in result.content[0].text
+    downloader.check_connection.assert_called_once_with()
 
 
 @pytest.mark.asyncio
@@ -586,6 +689,133 @@ def test_dns_resolve_propagates_router_errors() -> None:
 
     with pytest.raises(RouterOSError, match="dns timeout"):
         dns_resolve_impl(client, name="example.com")
+
+
+def test_healthcheck_reports_separate_api_and_ftp_statuses(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = Mock(host="router.test")
+    client.port = 8728
+    client.use_ssl = False
+    client.username = "api-user"
+    client.password = "api-pass"
+    client.print.return_value = [{"name": "lab-router"}]
+    monkeypatch.setenv("MIKROTIK_USER", "api-user")
+    monkeypatch.setenv("MIKROTIK_PASSWORD", "api-pass")
+    monkeypatch.setenv("MIKROTIK_FTP_USER", "ftp-user")
+    monkeypatch.setenv("MIKROTIK_FTP_PASSWORD", "ftp-pass")
+
+    class Settings:
+        host = "files.router.test"
+        port = 21
+        use_tls = False
+
+    downloader = Mock()
+    downloader.check_connection.side_effect = RouterFileDownloadError("ftp unavailable")
+
+    monkeypatch.setattr(core, "load_file_transfer_settings", lambda host: Settings())
+    monkeypatch.setattr(core, "FTPFileDownloader", lambda settings: downloader)
+
+    result = healthcheck_impl(client)
+
+    assert result["success"] is False
+    assert result["status"] == "degraded"
+    assert result["timestamp"].endswith("Z")
+    assert result["config"]["api_host"] == "router.test"
+    assert result["api"]["ok"] is True
+    assert result["api"]["code"] == "api.ok"
+    assert result["ftp"] == {
+        "ok": False,
+        "status": "failed",
+        "code": "ftp.error",
+        "message": "ftp unavailable",
+        "host": "files.router.test",
+        "port": 21,
+        "tls": False,
+        "duration_ms": result["ftp"]["duration_ms"],
+    }
+    assert isinstance(result["ftp"]["duration_ms"], int)
+
+
+def test_healthcheck_marks_api_failure_without_raising(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = Mock(host="router.test")
+    client.port = 8729
+    client.use_ssl = True
+    client.username = "api-user"
+    client.password = "api-pass"
+    client.print.side_effect = RouterOSError("api unavailable")
+    monkeypatch.setenv("MIKROTIK_USER", "api-user")
+    monkeypatch.setenv("MIKROTIK_PASSWORD", "api-pass")
+    monkeypatch.setenv("MIKROTIK_FTP_USER", "ftp-user")
+    monkeypatch.setenv("MIKROTIK_FTP_PASSWORD", "ftp-pass")
+
+    class Settings:
+        host = "files.router.test"
+        port = 21
+        use_tls = True
+
+    downloader = Mock()
+    downloader.check_connection.return_value = {
+        "working_directory": "/",
+        "listing_count": 1,
+        "listing_sample": ["backups"],
+        "operation": "pwd+nlst",
+    }
+    monkeypatch.setattr(core, "load_file_transfer_settings", lambda host: Settings())
+    monkeypatch.setattr(core, "FTPFileDownloader", lambda settings: downloader)
+
+    result = healthcheck_impl(client)
+
+    assert result["success"] is False
+    assert result["status"] == "degraded"
+    assert result["api"] == {
+        "ok": False,
+        "status": "failed",
+        "code": "api.error",
+        "message": "api unavailable",
+        "host": "router.test",
+        "port": 8729,
+        "tls": True,
+        "duration_ms": result["api"]["duration_ms"],
+    }
+    assert result["ftp"] == {
+        "ok": True,
+        "status": "ok",
+        "code": "ftp.ok",
+        "message": "FTP login and directory probe succeeded for files.router.test:21",
+        "host": "files.router.test",
+        "port": 21,
+        "tls": True,
+        "probe": {
+            "working_directory": "/",
+            "listing_count": 1,
+            "listing_sample": ["backups"],
+            "operation": "pwd+nlst",
+        },
+        "duration_ms": result["ftp"]["duration_ms"],
+    }
+    assert isinstance(result["api"]["duration_ms"], int)
+
+
+def test_healthcheck_classifies_api_auth_and_ftp_config_failures(monkeypatch: pytest.MonkeyPatch) -> None:
+    from mikrotik_mcp.client import RouterOSAuthError
+
+    client = Mock(host="router.test")
+    client.port = 8729
+    client.use_ssl = True
+    client.username = "wrong"
+    client.password = "bad"
+    client.print.side_effect = RouterOSAuthError("bad login")
+    monkeypatch.setenv("MIKROTIK_USER", "wrong")
+    monkeypatch.setenv("MIKROTIK_PASSWORD", "bad")
+    monkeypatch.delenv("MIKROTIK_FTP_USER", raising=False)
+    monkeypatch.delenv("MIKROTIK_FTP_PASSWORD", raising=False)
+
+    monkeypatch.setattr(core, "load_file_transfer_settings", Mock(side_effect=RuntimeError("must be set before downloading files")))
+
+    result = healthcheck_impl(client)
+
+    assert result["status"] == "failed"
+    assert result["api"]["code"] == "api.auth_failed"
+    assert result["ftp"]["code"] == "ftp.config_missing"
 
 
 def test_interface_monitor_returns_first_record() -> None:

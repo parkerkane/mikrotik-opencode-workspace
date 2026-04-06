@@ -38,7 +38,6 @@ def main(argv: list[str] | None = None) -> None:
         raise SystemExit("Usage: python tools/mikrotik-mcp/src/main.py <host>")
 
     client = load_settings(args[0])
-    client.open()
     try:
         create_app(client).run(transport="stdio")
     finally:

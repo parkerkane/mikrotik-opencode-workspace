@@ -31,6 +31,29 @@ class FTPFileDownloader:
     def __init__(self, settings: FileTransferSettings) -> None:
         self.settings = settings
 
+    def check_connection(self) -> dict[str, object]:
+        try:
+            session = self._connect()
+        except all_errors as exc:
+            raise RouterFileDownloadError(
+                f"Failed to connect to FTP service on {self.settings.host}:{self.settings.port}: {exc}"
+            ) from exc
+
+        try:
+            working_directory = session.pwd()
+            entries = session.nlst()
+        except all_errors as exc:
+            raise RouterFileDownloadError(f"Connected to FTP service but directory probe failed: {exc}") from exc
+        finally:
+            self._close_session(session)
+
+        return {
+            "working_directory": working_directory,
+            "listing_count": len(entries),
+            "listing_sample": entries[:5],
+            "operation": "pwd+nlst",
+        }
+
     def download_file(self, router_path: str, local_path: str | Path) -> None:
         remote_name = _normalize_router_path(router_path)
         target_path = Path(local_path)
@@ -49,10 +72,7 @@ class FTPFileDownloader:
         except all_errors as exc:
             raise RouterFileDownloadError(f"Failed to download router file '{remote_name}': {exc}") from exc
         finally:
-            try:
-                session.quit()
-            except all_errors:
-                session.close()
+            self._close_session(session)
 
     def _connect(self) -> FTP | FTP_TLS:
         if self.settings.use_tls:
@@ -69,6 +89,12 @@ class FTPFileDownloader:
         if self.settings.use_tls:
             session.prot_p()
         return session
+
+    def _close_session(self, session: FTP | FTP_TLS) -> None:
+        try:
+            session.quit()
+        except all_errors:
+            session.close()
 
 
 def load_file_transfer_settings(host: str) -> FileTransferSettings:

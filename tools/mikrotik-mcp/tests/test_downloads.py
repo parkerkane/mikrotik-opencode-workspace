@@ -85,6 +85,12 @@ class FakeFTPSession:
         assert command == "RETR backups/router.backup"
         callback(self.payload)
 
+    def pwd(self) -> str:
+        return "/"
+
+    def nlst(self) -> list[str]:
+        return ["backups", "flash", "skins"]
+
     def quit(self) -> None:
         self.quit_called = True
 
@@ -109,6 +115,26 @@ def test_ftp_file_downloader_writes_downloaded_file(monkeypatch: pytest.MonkeyPa
     assert session.quit_called is True
 
 
+def test_ftp_file_downloader_check_connection_logs_in_and_closes(monkeypatch: pytest.MonkeyPatch) -> None:
+    session = FakeFTPSession()
+    monkeypatch.setattr("mikrotik_mcp.downloads.FTP_TLS", lambda **_: session)
+
+    downloader = FTPFileDownloader(load_file_transfer_settings_for_test())
+
+    result = downloader.check_connection()
+
+    assert session.connected_to == ("router.test", 21)
+    assert session.logged_in_as == ("admin", "secret")
+    assert session.protected is True
+    assert session.quit_called is True
+    assert result == {
+        "working_directory": "/",
+        "listing_count": 3,
+        "listing_sample": ["backups", "flash", "skins"],
+        "operation": "pwd+nlst",
+    }
+
+
 def test_ftp_file_downloader_wraps_local_write_failures(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     session = FakeFTPSession(fail_on_retr=True)
     monkeypatch.setattr("mikrotik_mcp.downloads.FTP_TLS", lambda **_: session)
@@ -117,6 +143,35 @@ def test_ftp_file_downloader_wraps_local_write_failures(monkeypatch: pytest.Monk
 
     with pytest.raises(RouterFileDownloadError, match="Failed to write local file|Failed to download router file"):
         downloader.download_file("backups/router.backup", tmp_path / "router.backup")
+
+
+def test_ftp_file_downloader_check_connection_wraps_connect_failures(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FailingFTPSession(FakeFTPSession):
+        def connect(self, host: str, port: int) -> None:
+            raise OSError("connect failed")
+
+    monkeypatch.setattr("mikrotik_mcp.downloads.FTP_TLS", lambda **_: FailingFTPSession())
+
+    downloader = FTPFileDownloader(load_file_transfer_settings_for_test())
+
+    with pytest.raises(RouterFileDownloadError, match="Failed to connect to FTP service"):
+        downloader.check_connection()
+
+
+def test_ftp_file_downloader_check_connection_wraps_directory_probe_failures(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FailingProbeSession(FakeFTPSession):
+        def nlst(self) -> list[str]:
+            raise OSError("listing failed")
+
+    session = FailingProbeSession()
+    monkeypatch.setattr("mikrotik_mcp.downloads.FTP_TLS", lambda **_: session)
+
+    downloader = FTPFileDownloader(load_file_transfer_settings_for_test())
+
+    with pytest.raises(RouterFileDownloadError, match="directory probe failed"):
+        downloader.check_connection()
+
+    assert session.quit_called is True
 
 
 def load_file_transfer_settings_for_test():

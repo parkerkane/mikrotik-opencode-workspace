@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import UTC, datetime
+import os
+from time import perf_counter
 from typing import Any
 
-from ..client import RouterOSClient
+from ..client import RouterOSAuthError, RouterOSClient, RouterOSFatalError, RouterOSError, RouterOSTransportError
+from ..downloads import FTPFileDownloader, RouterFileDownloadError, load_file_transfer_settings
 from ..filters import apply_jq_filter
 from ..server_helpers import (
     build_equality_queries,
@@ -229,6 +233,147 @@ def interface_monitor_impl(
     if isinstance(result, dict) and result:
         return result
     raise ValueError("No interface monitor result returned")
+
+
+def _utc_timestamp() -> str:
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
+
+
+def _elapsed_ms(started_at: float) -> int:
+    return max(0, round((perf_counter() - started_at) * 1000))
+
+
+def _api_config_status(client: RouterOSClient) -> dict[str, Any]:
+    return {
+        "api_credentials_configured": bool(client.username and client.password),
+        "api_host": client.host,
+        "api_port": client.port,
+        "api_tls": client.use_ssl,
+    }
+
+
+def _ftp_config_status(client: RouterOSClient) -> dict[str, Any]:
+    ftp_user = os.getenv("MIKROTIK_FTP_USER")
+    ftp_password = os.getenv("MIKROTIK_FTP_PASSWORD")
+    api_user = os.getenv("MIKROTIK_USER")
+    api_password = os.getenv("MIKROTIK_PASSWORD")
+    return {
+        "ftp_credentials_configured": bool((ftp_user and ftp_password) or (api_user and api_password)),
+        "ftp_host_override": bool(os.getenv("MIKROTIK_FTP_HOST")),
+        "ftp_port_override": bool(os.getenv("MIKROTIK_FTP_PORT")),
+        "ftp_tls_override": bool(os.getenv("MIKROTIK_FTP_TLS")),
+        "resolved_host": os.getenv("MIKROTIK_FTP_HOST") or client.host,
+    }
+
+
+def _classify_api_error(exc: Exception) -> str:
+    if isinstance(exc, RouterOSAuthError):
+        return "api.auth_failed"
+    if isinstance(exc, RouterOSTransportError):
+        return "api.connect_failed"
+    if isinstance(exc, RouterOSFatalError):
+        return "api.fatal"
+    if isinstance(exc, RouterOSError):
+        return "api.error"
+    return "api.unknown"
+
+
+def _classify_ftp_error(exc: Exception) -> str:
+    if isinstance(exc, RuntimeError) and "must be set before downloading files" in str(exc):
+        return "ftp.config_missing"
+    message = str(exc).lower()
+    if "login incorrect" in message or "not logged in" in message or "530" in message:
+        return "ftp.auth_failed"
+    if "directory probe failed" in message:
+        return "ftp.operation_failed"
+    if "failed to connect to ftp service" in message:
+        return "ftp.connect_failed"
+    return "ftp.error"
+
+
+def _overall_health_status(*, api_ok: bool, ftp_ok: bool) -> str:
+    if api_ok and ftp_ok:
+        return "healthy"
+    if api_ok or ftp_ok:
+        return "degraded"
+    return "failed"
+
+
+def healthcheck_impl(client: RouterOSClient) -> dict[str, Any]:
+    timestamp = _utc_timestamp()
+    config = {
+        **_api_config_status(client),
+        **_ftp_config_status(client),
+    }
+
+    api_started_at = perf_counter()
+    try:
+        identity = system_identity_get_impl(client)
+        api_result: dict[str, Any] = {
+            "ok": True,
+            "status": "ok",
+            "code": "api.ok",
+            "message": "RouterOS API returned system identity",
+            "identity": identity,
+            "host": client.host,
+            "port": client.port,
+            "tls": client.use_ssl,
+        }
+    except Exception as exc:
+        api_result = {
+            "ok": False,
+            "status": "failed",
+            "code": _classify_api_error(exc),
+            "message": str(exc),
+            "host": client.host,
+            "port": client.port,
+            "tls": client.use_ssl,
+        }
+    api_result["duration_ms"] = _elapsed_ms(api_started_at)
+
+    settings = None
+    ftp_started_at = perf_counter()
+    try:
+        settings = load_file_transfer_settings(client.host)
+        ftp_probe = FTPFileDownloader(settings).check_connection()
+        ftp_result: dict[str, Any] = {
+            "ok": True,
+            "status": "ok",
+            "code": "ftp.ok",
+            "message": f"FTP login and directory probe succeeded for {settings.host}:{settings.port}",
+            "host": settings.host,
+            "port": settings.port,
+            "tls": settings.use_tls,
+            "probe": ftp_probe,
+        }
+    except (RouterFileDownloadError, RuntimeError, ValueError) as exc:
+        ftp_result = {
+            "ok": False,
+            "status": "failed",
+            "code": _classify_ftp_error(exc),
+            "message": str(exc),
+        }
+        if settings is not None:
+            ftp_result.update(
+                {
+                    "host": settings.host,
+                    "port": settings.port,
+                    "tls": settings.use_tls,
+                }
+            )
+    ftp_result["duration_ms"] = _elapsed_ms(ftp_started_at)
+
+    overall_status = _overall_health_status(api_ok=bool(api_result["ok"]), ftp_ok=bool(ftp_result["ok"]))
+
+    return {
+        "success": overall_status == "healthy",
+        "status": overall_status,
+        "timestamp": timestamp,
+        "target_host": client.host,
+        "config": config,
+        "api": api_result,
+        "ftp": ftp_result,
+    }
 
 
 def system_resource_get_impl(client: RouterOSClient) -> dict[str, str]:

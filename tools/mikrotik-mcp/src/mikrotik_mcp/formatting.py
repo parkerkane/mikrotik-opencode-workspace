@@ -149,6 +149,82 @@ def format_dns_resolve_result(record: dict[str, Any]) -> CallToolResult:
     )
 
 
+def format_healthcheck_result(record: dict[str, Any]) -> CallToolResult:
+    api = record.get("api") if isinstance(record.get("api"), dict) else {}
+    ftp = record.get("ftp") if isinstance(record.get("ftp"), dict) else {}
+    identity = api.get("identity") if isinstance(api.get("identity"), dict) else {}
+    config = record.get("config") if isinstance(record.get("config"), dict) else {}
+    ftp_probe = ftp.get("probe") if isinstance(ftp.get("probe"), dict) else {}
+
+    display_record = {
+        "success": record.get("success"),
+        "status": record.get("status"),
+        "timestamp": record.get("timestamp"),
+        "target-host": record.get("target_host"),
+        "api-status": api.get("status") or ("ok" if api.get("ok") else "failed"),
+        "api-code": api.get("code"),
+        "api-message": api.get("message"),
+        "api-name": identity.get("name"),
+        "api-host": api.get("host"),
+        "api-port": api.get("port"),
+        "api-tls": api.get("tls"),
+        "api-duration-ms": api.get("duration_ms"),
+        "ftp-status": ftp.get("status") or ("ok" if ftp.get("ok") else "failed"),
+        "ftp-code": ftp.get("code"),
+        "ftp-message": ftp.get("message"),
+        "ftp-host": ftp.get("host"),
+        "ftp-port": ftp.get("port"),
+        "ftp-tls": ftp.get("tls"),
+        "ftp-duration-ms": ftp.get("duration_ms"),
+        "ftp-probe": ftp_probe.get("operation"),
+        "ftp-working-directory": ftp_probe.get("working_directory"),
+        "ftp-listing-count": ftp_probe.get("listing_count"),
+        "config-api-credentials": config.get("api_credentials_configured"),
+        "config-ftp-credentials": config.get("ftp_credentials_configured"),
+        "config-ftp-host-override": config.get("ftp_host_override"),
+        "config-resolved-ftp-host": config.get("resolved_host"),
+    }
+    lines = [
+        f"Healthcheck: {_display_value(record.get('status'))}",
+        "",
+        *_render_key_value_table(
+            display_record,
+            preferred_fields=(
+                "success",
+                "status",
+                "timestamp",
+                "target-host",
+                "api-status",
+                "api-code",
+                "api-message",
+                "api-name",
+                "api-host",
+                "api-port",
+                "api-tls",
+                "api-duration-ms",
+                "ftp-status",
+                "ftp-code",
+                "ftp-message",
+                "ftp-host",
+                "ftp-port",
+                "ftp-tls",
+                "ftp-duration-ms",
+                "ftp-probe",
+                "ftp-working-directory",
+                "ftp-listing-count",
+                "config-api-credentials",
+                "config-ftp-credentials",
+                "config-ftp-host-override",
+                "config-resolved-ftp-host",
+            ),
+        ),
+    ]
+    return CallToolResult(
+        content=[TextContent(type="text", text="\n".join(lines))],
+        structuredContent=record,
+    )
+
+
 def format_tool_ping_result(address: str, items: list[dict[str, Any]]) -> CallToolResult:
     return CallToolResult(
         content=[

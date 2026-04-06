@@ -179,6 +179,18 @@ def test_command_run_returns_done_payload_without_records(client: RouterOSClient
     assert result == {"ret": "ok"}
 
 
+def test_execute_opens_connection_lazily_when_socket_is_missing(client: RouterOSClient) -> None:
+    client.open = Mock(side_effect=lambda: setattr(client, "_socket", object()))
+    client.write_sentence = Mock()
+    client.read_sentence = Mock(side_effect=[["!done"]])
+
+    reply = client.execute(["/system/identity/print"])
+
+    assert reply.done == {}
+    client.open.assert_called_once_with()
+    client.write_sentence.assert_called_once_with(["/system/identity/print"])
+
+
 def test_command_run_supports_explicit_tag(client: RouterOSClient, fake_socket) -> None:
     fake_socket.response_bytes.extend(client.encode_sentence(["!done", ".tag=ping-1", "=ret=ok"]))
     client._socket = fake_socket

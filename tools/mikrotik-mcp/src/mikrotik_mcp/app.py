@@ -12,6 +12,7 @@ from .formatting import (
     format_dns_resolve_result,
     format_dhcp_server_list_result,
     format_dns_get_result,
+    format_healthcheck_result,
     format_interface_get_result,
     format_interface_list_result,
     format_interface_monitor_result,
@@ -163,6 +164,10 @@ def _register_core_tools(app: FastMCP, client: RouterOSClient) -> None:
     @app.tool(description="Get the RouterOS system identity.")
     def system_identity_get() -> Annotated[CallToolResult, dict[str, str]]:
         return format_system_identity_result(core.system_identity_get_impl(client))
+
+    @app.tool(description="Check whether the MCP can fetch RouterOS API data and connect to FTP.")
+    def healthcheck() -> Annotated[CallToolResult, dict[str, Any]]:
+        return format_healthcheck_result(core.healthcheck_impl(client))
 
     @app.tool(description="Get the RouterOS system clock settings.")
     def system_clock_get() -> Annotated[CallToolResult, dict[str, str]]:
