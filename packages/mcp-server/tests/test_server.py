@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, Mock
 
 import pytest
 
+from mikrotik_mcp.app import create_app
 from mikrotik_mcp.client import ListenResult
 from mikrotik_mcp.downloads import RouterFileDownloadError
 from mikrotik_mcp import server_helpers
@@ -95,6 +96,76 @@ def isolated_client_mock(inner_client: Mock) -> MagicMock:
     isolated.__enter__.return_value = inner_client
     isolated.__exit__.return_value = None
     return isolated
+
+
+@pytest.mark.asyncio
+async def test_app_system_resource_get_returns_markdown_and_structured_content(socket_enabled) -> None:
+    client = Mock()
+    client.print.return_value = [{"version": "7.17", "uptime": "1d2h", "board-name": "RB5009"}]
+
+    result = await create_app(client).call_tool("system_resource_get", {})
+
+    assert result.structuredContent == {"version": "7.17", "uptime": "1d2h", "board-name": "RB5009"}
+    assert len(result.content) == 1
+    assert "System resource: RouterOS 7.17, uptime 1d2h" in result.content[0].text
+    assert "| Field | Value |" in result.content[0].text
+    assert "| board-name | RB5009 |" in result.content[0].text
+
+
+@pytest.mark.asyncio
+async def test_app_interface_list_returns_markdown_table_and_wrapped_structured_content(socket_enabled) -> None:
+    client = Mock()
+    client.print.return_value = [
+        {
+            "name": "ether1",
+            "type": "ether",
+            "running": "true",
+            "disabled": "false",
+            "actual-mtu": "1500",
+            "mac-address": "00:11:22:33:44:55",
+        }
+    ]
+
+    result = await create_app(client).call_tool("interface_list", {})
+
+    assert result.structuredContent == {"result": client.print.return_value}
+    assert "Interfaces: 1 interface" in result.content[0].text
+    assert "| Name | Type | Running | Disabled | MTU | MAC Address |" in result.content[0].text
+    assert "| ether1 | ether | yes | no | 1500 | 00:11:22:33:44:55 |" in result.content[0].text
+
+
+@pytest.mark.asyncio
+async def test_app_dhcp_network_list_formats_empty_values_consistently(socket_enabled) -> None:
+    client = Mock()
+    client.print.return_value = [{"address": "192.0.2.0/24", "gateway": "192.0.2.1", "dns-server": "", "domain": "", "ntp-server": ""}]
+
+    result = await create_app(client).call_tool("dhcp_network_list", {})
+
+    assert result.structuredContent == {"result": client.print.return_value}
+    assert "DHCP Networks: 1 DHCP network" in result.content[0].text
+    assert "| 192.0.2.0/24 | 192.0.2.1 | - | - | - |" in result.content[0].text
+
+
+@pytest.mark.asyncio
+async def test_app_dns_get_returns_summary_line_and_structured_content(socket_enabled) -> None:
+    client = Mock()
+    client.print.return_value = [{"servers": "1.1.1.1,8.8.8.8", "allow-remote-requests": "true", "cache-size": "2048KiB"}]
+
+    result = await create_app(client).call_tool("dns_get", {})
+
+    assert result.structuredContent == client.print.return_value[0]
+    assert "DNS settings: servers 1.1.1.1,8.8.8.8, remote requests yes" in result.content[0].text
+    assert "| servers | 1.1.1.1,8.8.8.8 |" in result.content[0].text
+
+
+@pytest.mark.asyncio
+async def test_app_resource_print_remains_raw_json_output(socket_enabled) -> None:
+    client = Mock()
+    client.print.return_value = [{"name": "ether1", "running": "true"}]
+
+    result = await create_app(client).call_tool("resource_print", {"menu": "/interface"})
+
+    assert result[0].text == '{\n  "name": "ether1",\n  "running": "true"\n}'
 
 
 def test_resource_print_calls_client_and_returns_normalized_items() -> None:

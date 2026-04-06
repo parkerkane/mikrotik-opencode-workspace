@@ -1,10 +1,26 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import CallToolResult
 
 from .client import RouterOSClient
+from .formatting import (
+    format_dhcp_lease_list_result,
+    format_dhcp_network_list_result,
+    format_dhcp_server_list_result,
+    format_dns_get_result,
+    format_interface_get_result,
+    format_interface_list_result,
+    format_ip_address_get_result,
+    format_ip_address_list_result,
+    format_ip_route_get_result,
+    format_ip_route_list_result,
+    format_system_clock_result,
+    format_system_identity_result,
+    format_system_resource_result,
+)
 from .tool_impls import access, core, files, layer2, security
 
 
@@ -99,78 +115,80 @@ def _register_core_tools(app: FastMCP, client: RouterOSClient) -> None:
         )
 
     @app.tool(description="Get RouterOS system resource details.")
-    def system_resource_get() -> dict[str, str]:
-        return core.system_resource_get_impl(client)
+    def system_resource_get() -> Annotated[CallToolResult, dict[str, str]]:
+        return format_system_resource_result(core.system_resource_get_impl(client))
 
     @app.tool(description="Get the RouterOS system identity.")
-    def system_identity_get() -> dict[str, str]:
-        return core.system_identity_get_impl(client)
+    def system_identity_get() -> Annotated[CallToolResult, dict[str, str]]:
+        return format_system_identity_result(core.system_identity_get_impl(client))
 
     @app.tool(description="Get the RouterOS system clock settings.")
-    def system_clock_get() -> dict[str, str]:
-        return core.system_clock_get_impl(client)
+    def system_clock_get() -> Annotated[CallToolResult, dict[str, str]]:
+        return format_system_clock_result(core.system_clock_get_impl(client))
 
     @app.tool(description="List network interfaces with optional status filters.")
     def interface_list(
         running_only: bool = False,
         disabled: bool | None = None,
-    ) -> list[dict[str, str]]:
-        return core.interface_list_impl(client, running_only=running_only, disabled=disabled)
+    ) -> Annotated[CallToolResult, list[dict[str, str]]]:
+        return format_interface_list_result(core.interface_list_impl(client, running_only=running_only, disabled=disabled))
 
     @app.tool(description="Get one interface by name or RouterOS item id.")
     def interface_get(
         name: str | None = None,
         item_id: str | None = None,
-    ) -> dict[str, str]:
-        return core.interface_get_impl(client, name=name, item_id=item_id)
+    ) -> Annotated[CallToolResult, dict[str, str]]:
+        return format_interface_get_result(core.interface_get_impl(client, name=name, item_id=item_id))
 
     @app.tool(description="List IP addresses with optional interface and disabled filters.")
     def ip_address_list(
         interface: str | None = None,
         disabled: bool | None = None,
-    ) -> list[dict[str, str]]:
-        return core.ip_address_list_impl(client, interface=interface, disabled=disabled)
+    ) -> Annotated[CallToolResult, list[dict[str, str]]]:
+        return format_ip_address_list_result(core.ip_address_list_impl(client, interface=interface, disabled=disabled))
 
     @app.tool(description="Get one IP address by address or RouterOS item id.")
     def ip_address_get(
         address: str | None = None,
         item_id: str | None = None,
-    ) -> dict[str, str]:
-        return core.ip_address_get_impl(client, address=address, item_id=item_id)
+    ) -> Annotated[CallToolResult, dict[str, str]]:
+        return format_ip_address_get_result(core.ip_address_get_impl(client, address=address, item_id=item_id))
 
     @app.tool(description="List IP routes with optional destination and disabled filters.")
     def ip_route_list(
         dst_address: str | None = None,
         disabled: bool | None = None,
-    ) -> list[dict[str, str]]:
-        return core.ip_route_list_impl(client, dst_address=dst_address, disabled=disabled)
+    ) -> Annotated[CallToolResult, list[dict[str, str]]]:
+        return format_ip_route_list_result(core.ip_route_list_impl(client, dst_address=dst_address, disabled=disabled))
 
     @app.tool(description="Get one IP route by destination or RouterOS item id.")
     def ip_route_get(
         dst_address: str | None = None,
         item_id: str | None = None,
-    ) -> dict[str, str]:
-        return core.ip_route_get_impl(client, dst_address=dst_address, item_id=item_id)
+    ) -> Annotated[CallToolResult, dict[str, str]]:
+        return format_ip_route_get_result(core.ip_route_get_impl(client, dst_address=dst_address, item_id=item_id))
 
     @app.tool(description="List DHCP leases with optional address, MAC, and active filters.")
     def dhcp_lease_list(
         address: str | None = None,
         mac_address: str | None = None,
         active_only: bool = False,
-    ) -> list[dict[str, str]]:
-        return core.dhcp_lease_list_impl(client, address=address, mac_address=mac_address, active_only=active_only)
+    ) -> Annotated[CallToolResult, list[dict[str, str]]]:
+        return format_dhcp_lease_list_result(
+            core.dhcp_lease_list_impl(client, address=address, mac_address=mac_address, active_only=active_only)
+        )
 
     @app.tool(description="List configured DHCP servers.")
-    def dhcp_server_list() -> list[dict[str, str]]:
-        return core.dhcp_server_list_impl(client)
+    def dhcp_server_list() -> Annotated[CallToolResult, list[dict[str, str]]]:
+        return format_dhcp_server_list_result(core.dhcp_server_list_impl(client))
 
     @app.tool(description="List configured DHCP networks.")
-    def dhcp_network_list() -> list[dict[str, str]]:
-        return core.dhcp_network_list_impl(client)
+    def dhcp_network_list() -> Annotated[CallToolResult, list[dict[str, str]]]:
+        return format_dhcp_network_list_result(core.dhcp_network_list_impl(client))
 
     @app.tool(description="Get RouterOS DNS settings.")
-    def dns_get() -> dict[str, str]:
-        return core.dns_get_impl(client)
+    def dns_get() -> Annotated[CallToolResult, dict[str, str]]:
+        return format_dns_get_result(core.dns_get_impl(client))
 
     @app.tool(description="Update RouterOS DNS settings.")
     def dns_set(
