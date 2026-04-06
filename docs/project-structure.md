@@ -16,9 +16,10 @@ manager-oc/
 │   ├── project-structure.md      # This file
 │   └── mcp-configuration.md      # How to configure OpenCode MCP
 │
-└── packages/
-    └── mcp-server/               # The MCP server package
-        ├── pyproject.toml
+├── requirements.txt              # Runtime and test dependencies
+├── pytest.ini                    # Root pytest configuration
+└── tools/
+    └── mikrotik-mcp/             # The MCP server project
         ├── src/
         │   ├── main.py           # Entry point — parse args, load .env, start server
         │   ├── server.py         # MCP server setup, tool registration
@@ -63,7 +64,7 @@ MIKROTIK_API_PORT=8729
 MIKROTIK_TLS_VERIFY=false
 ```
 
-### `packages/mcp-server/src/main.py`
+### `tools/mikrotik-mcp/src/main.py`
 Entry point responsibilities:
 1. Read `sys.argv[1]` for the router host (required)
 2. Load `.env` from the workspace root via `python-dotenv`
@@ -71,7 +72,7 @@ Entry point responsibilities:
 4. Instantiate the RouterOS API client with host + credentials
 5. Start the MCP server on stdio
 
-### `packages/mcp-server/src/client.py`
+### `tools/mikrotik-mcp/src/client.py`
 RouterOS API client responsibilities:
 1. Open a socket to the router on `8728` or `8729`
 2. Perform `/login` with username and password
@@ -81,20 +82,13 @@ RouterOS API client responsibilities:
 
 ## Dependencies
 
-```json
-{
-  "dependencies": {
-    "mcp": "^1.x",
-    "python-dotenv": "^1.x"
-  },
-  "optional-dependencies": {
-    "test": [
-      "pytest>=8,<9",
-      "pytest-asyncio>=0.23,<1",
-      "pytest-socket>=0.7,<1"
-    ]
-  }
-}
+```txt
+jq>=1,<2
+mcp>=1,<2
+python-dotenv>=1,<2
+pytest>=8,<9
+pytest-asyncio>=0.23,<1
+pytest-socket>=0.7,<1
 ```
 
 Python 3.11+ is required.
@@ -102,8 +96,7 @@ Python 3.11+ is required.
 ## Build
 
 ```bash
-cd packages/mcp-server
-pip install -e .
+pip install -r requirements.txt
 pytest
 ```
 

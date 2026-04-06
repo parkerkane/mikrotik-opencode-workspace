@@ -1,8 +1,0 @@
-jq<2,>=1
-mcp<2,>=1
-python-dotenv<2,>=1
-
-[test]
-pytest<9,>=8
-pytest-asyncio<1,>=0.23
-pytest-socket<1,>=0.7

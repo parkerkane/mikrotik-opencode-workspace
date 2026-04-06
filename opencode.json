@@ -5,7 +5,7 @@
       "type": "local",
       "command": [
         "python",
-        "packages/mcp-server/src/main.py",
+        "tools/mikrotik-mcp/src/main.py",
         "router.local"
       ],
       "enabled": true

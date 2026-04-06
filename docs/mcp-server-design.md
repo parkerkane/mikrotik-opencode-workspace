@@ -5,7 +5,7 @@
 The server is launched by OpenCode as a child process:
 
 ```
-python packages/mcp-server/src/main.py <host>
+python tools/mikrotik-mcp/src/main.py <host>
 ```
 
 | Source | Value | Where used |

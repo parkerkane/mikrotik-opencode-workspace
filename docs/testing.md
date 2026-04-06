@@ -16,7 +16,7 @@
 ## Recommended Test Layout
 
 ```
-packages/mcp-server/
+tools/mikrotik-mcp/
 ├── src/
 └── tests/
     ├── conftest.py
@@ -89,7 +89,6 @@ For composite tools such as backup collection, also mock local filesystem writes
 ## Running Tests
 
 ```bash
-cd packages/mcp-server
 pytest
 ```
 

@@ -31,11 +31,11 @@ An OpenCode workspace for managing MikroTik routers via an MCP (Model Context Pr
 
 ## Components
 
-### 1. MCP Server (`packages/mcp-server/`)
+### 1. MCP Server (`tools/mikrotik-mcp/`)
 - Language: Python
 - Transport: **stdio** (launched by OpenCode as a child process)
 - Credentials: loaded from `.env` (`MIKROTIK_USER`, `MIKROTIK_PASSWORD`)
-- Router host: passed as first CLI argument (`python packages/mcp-server/src/main.py <host>`)
+- Router host: passed as first CLI argument (`python tools/mikrotik-mcp/src/main.py <host>`)
 - Router transport: RouterOS API over TCP, optionally TLS on `8729`
 
 ### 2. OpenCode Project Configuration (`opencode.json`)
@@ -47,7 +47,7 @@ An OpenCode workspace for managing MikroTik routers via an MCP (Model Context Pr
 - Contains `MIKROTIK_USER` and `MIKROTIK_PASSWORD`
 - May also contain API transport settings such as `MIKROTIK_API_SSL` and `MIKROTIK_TLS_VERIFY`
 
-### 4. Test Suite (`packages/mcp-server/tests/`)
+### 4. Test Suite (`tools/mikrotik-mcp/tests/`)
 - Uses `pytest` for fast local verification
 - Mocks RouterOS API socket I/O so default tests do not require a live router
 - Covers sentence encoding, login flow, error handling, and MCP tool behavior separately

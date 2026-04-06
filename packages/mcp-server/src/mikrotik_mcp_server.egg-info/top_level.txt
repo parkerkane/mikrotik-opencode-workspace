@@ -1,5 +1,0 @@
-client
-main
-mikrotik_mcp
-server
-tools

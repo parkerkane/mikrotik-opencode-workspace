@@ -12,7 +12,7 @@ Placed at the workspace root, `opencode.json` is picked up automatically by Open
       "type": "local",
       "command": [
         "python",
-        "packages/mcp-server/src/main.py",
+        "tools/mikrotik-mcp/src/main.py",
         "192.168.88.1"
       ],
       "enabled": true
@@ -52,12 +52,12 @@ Add additional server entries with different names and hosts:
   "mcp": {
     "mikrotik-core": {
       "type": "local",
-      "command": ["python", "packages/mcp-server/src/main.py", "10.0.0.1"],
+      "command": ["python", "tools/mikrotik-mcp/src/main.py", "10.0.0.1"],
       "enabled": true
     },
     "mikrotik-branch": {
       "type": "local",
-      "command": ["python", "packages/mcp-server/src/main.py", "10.1.0.1"],
+      "command": ["python", "tools/mikrotik-mcp/src/main.py", "10.1.0.1"],
       "enabled": true
     }
   }

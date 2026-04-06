@@ -74,7 +74,7 @@ from mikrotik_mcp.server import (
 )
 
 
-WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
+WORKSPACE_ROOT = Path(__file__).resolve().parents[4]
 
 
 class RecordingDownloader:

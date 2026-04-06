@@ -2,7 +2,7 @@
 
 MikroTik Manager is an OpenCode workspace for managing MikroTik routers through a local MCP server.
 
-Current status: Phases 1-5 are implemented in `packages/mcp-server/`.
+Current status: Phases 1-5 are implemented in `tools/mikrotik-mcp/`.
 
 Implemented today:
 - RouterOS API client over TCP/TLS
@@ -18,10 +18,10 @@ Implemented today:
 
 ## Layout
 
-- `packages/mcp-server/`: active Python package
-- `packages/mcp-server/src/main.py`: MCP entry script
-- `packages/mcp-server/src/mikrotik_mcp/server.py`: server wiring and `resource_print`
-- `packages/mcp-server/src/mikrotik_mcp/client.py`: RouterOS transport and protocol logic
+- `tools/mikrotik-mcp/`: active MCP server project
+- `tools/mikrotik-mcp/src/main.py`: MCP entry script
+- `tools/mikrotik-mcp/src/mikrotik_mcp/server.py`: server wiring and `resource_print`
+- `tools/mikrotik-mcp/src/mikrotik_mcp/client.py`: RouterOS transport and protocol logic
 - `docs/implementation-phases.md`: delivery roadmap
 
 ## Requirements
@@ -41,16 +41,16 @@ MIKROTIK_TLS_VERIFY=false
 ```
 
 Notes:
-- `.env` is loaded from the repository root, not from `packages/mcp-server/`.
+- `.env` is loaded from the repository root.
 - TLS is enabled by default.
 - Default port is `8729` when SSL is enabled, otherwise `8728`.
 
 ## Setup
 
-Run all Python commands from `packages/mcp-server/` using your active `pyenv` Python:
+Create or activate a Python environment, then install dependencies from the repository root:
 
 ```bash
-pip install -e '.[test]'
+pip install -r requirements.txt
 ```
 
 ## Run The MCP Server
@@ -58,14 +58,12 @@ pip install -e '.[test]'
 From the repository root:
 
 ```bash
-python packages/mcp-server/src/main.py <router-host>
+python tools/mikrotik-mcp/src/main.py <router-host>
 ```
 
 The host argument is required.
 
 ## Testing
-
-From `packages/mcp-server/`:
 
 ```bash
 pytest
@@ -74,12 +72,12 @@ pytest
 Run one focused test:
 
 ```bash
-pytest tests/test_server.py -k invalid_jq_filter
+pytest tools/mikrotik-mcp/tests/test_server.py -k invalid_jq_filter
 ```
 
 Testing notes:
 - `pytest` runs with `--disable-socket`, so default tests must stay fully mocked.
-- Client transport tests use `FakeSocket` in `packages/mcp-server/tests/conftest.py`.
+- Client transport tests use `FakeSocket` in `tools/mikrotik-mcp/tests/conftest.py`.
 
 ## Tool Surface
 

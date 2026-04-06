@@ -1,26 +1,26 @@
 # AGENTS
 
 ## Scope
-- The only active code package is `packages/mcp-server/`. There is no root build/test manifest.
+- The only active code package is `tools/mikrotik-mcp/`.
 - Current implementation scope is through Phase 5: generic read/mutation tools, core operational read tools, DNS set support, router file download, backup collection workflow, and bridge/VLAN/firewall/PPP/WireGuard tooling. Roadmap source: `docs/implementation-phases.md`.
 
 ## Working Directory
-- Run Python install and test commands from `packages/mcp-server/`, not the repo root.
+- Run Python install and test commands from the repo root.
 
 ## Verified Commands
-- Install package + test deps: `pip install -e '.[test]'`
+- Install runtime + test deps: `pip install -r requirements.txt`
 - Run full test suite: `pytest`
-- Run one focused test: `pytest tests/test_server.py -k invalid_jq_filter`
+- Run one focused test: `pytest tools/mikrotik-mcp/tests/test_server.py -k invalid_jq_filter`
 
 ## Entry Points
-- OpenCode/MCP entry script: `packages/mcp-server/src/main.py`
-- Real server wiring lives in `packages/mcp-server/src/mikrotik_mcp/server.py`
-- RouterOS protocol/client logic lives in `packages/mcp-server/src/mikrotik_mcp/client.py`
+- OpenCode/MCP entry script: `tools/mikrotik-mcp/src/main.py`
+- Real server wiring lives in `tools/mikrotik-mcp/src/mikrotik_mcp/server.py`
+- RouterOS protocol/client logic lives in `tools/mikrotik-mcp/src/mikrotik_mcp/client.py`
 - Top-level `src/main.py`, `src/server.py`, and `src/client.py` are thin compatibility wrappers.
 
 ## Runtime Gotchas
-- `main.py` requires the router host as CLI arg: `python packages/mcp-server/src/main.py <host>`.
-- Startup loads `.env` from the workspace root, not from `packages/mcp-server/`.
+- `main.py` requires the router host as CLI arg: `python tools/mikrotik-mcp/src/main.py <host>`.
+- Startup loads `.env` from the workspace root.
 - Required env vars: `MIKROTIK_USER`, `MIKROTIK_PASSWORD`.
 - Optional transport env vars already wired: `MIKROTIK_API_SSL`, `MIKROTIK_API_PORT`, `MIKROTIK_TLS_VERIFY`.
 - TLS defaults to enabled; default port is `8729` when SSL is on, else `8728`.
@@ -36,8 +36,8 @@
 - Only show raw JSON or raw tool output when the user explicitly requests raw data.
 
 ## Testing Conventions
-- `pytest` is configured with `--disable-socket` in `packages/mcp-server/pyproject.toml`; default tests must stay fully mocked.
-- Existing tests use `FakeSocket` in `packages/mcp-server/tests/conftest.py` for client transport tests and `Mock()` for tool-layer tests.
+- `pytest` is configured with `--disable-socket` in root `pytest.ini`; default tests must stay fully mocked.
+- Existing tests use `FakeSocket` in `tools/mikrotik-mcp/tests/conftest.py` for client transport tests and `Mock()` for tool-layer tests.
 - Keep `jq_filter` behavior tool-side: `resource_print` applies it after RouterOS replies are normalized to JSON-like Python data.
 
 ## Near-Term Direction

@@ -35,7 +35,7 @@ def load_settings(host: str) -> RouterOSClient:
 def main(argv: list[str] | None = None) -> None:
     args = argv if argv is not None else sys.argv[1:]
     if not args:
-        raise SystemExit("Usage: python packages/mcp-server/src/main.py <host>")
+        raise SystemExit("Usage: python tools/mikrotik-mcp/src/main.py <host>")
 
     client = load_settings(args[0])
     client.open()
