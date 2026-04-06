@@ -6,6 +6,8 @@ from unittest.mock import Mock
 import pytest
 
 from mikrotik_mcp.downloads import RouterFileDownloadError
+from mikrotik_mcp import server_helpers
+from mikrotik_mcp.tool_impls import files as file_tool_impls
 from mikrotik_mcp.server import (
     bridge_add_impl,
     bridge_list_impl,
@@ -985,7 +987,7 @@ def test_file_download_uses_explicit_local_path(tmp_path: Path) -> None:
 def test_file_download_defaults_to_local_backups_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     client = Mock(host="router.test")
     downloader = RecordingDownloader()
-    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(file_tool_impls, "workspace_root", lambda: tmp_path)
     router_path = "backups/pytest-unique-router.backup"
 
     result = file_download_impl(client, router_path=router_path, downloader=downloader)
@@ -993,7 +995,7 @@ def test_file_download_defaults_to_local_backups_directory(tmp_path: Path, monke
     local_path = Path(str(result["local_path"]))
     assert result["success"] is True
     assert result["router_path"] == router_path
-    assert local_path.parent == WORKSPACE_ROOT / "backups"
+    assert local_path.parent == tmp_path / "backups"
     assert local_path.name.startswith("pytest-unique-router")
     assert local_path.suffix == ".backup"
     assert downloader.calls == [(router_path, local_path)]
@@ -1002,7 +1004,7 @@ def test_file_download_defaults_to_local_backups_directory(tmp_path: Path, monke
 def test_file_download_resolves_relative_local_path_from_workspace_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     client = Mock(host="router.test")
     downloader = RecordingDownloader()
-    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(file_tool_impls, "workspace_root", lambda: tmp_path)
 
     result = file_download_impl(
         client,
@@ -1011,7 +1013,7 @@ def test_file_download_resolves_relative_local_path_from_workspace_root(tmp_path
         downloader=downloader,
     )
 
-    expected_path = WORKSPACE_ROOT / "backups" / "custom" / "router.backup"
+    expected_path = tmp_path / "backups" / "custom" / "router.backup"
     assert result == {
         "success": True,
         "router_path": "backups/router.backup",
@@ -1080,7 +1082,8 @@ def test_system_backup_collect_resolves_relative_local_dir_from_workspace_root(
     client = Mock(host="router.test")
     client.run.return_value = {"success": True}
     downloader = RecordingDownloader()
-    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(file_tool_impls, "workspace_root", lambda: tmp_path)
+    monkeypatch.setattr(server_helpers, "workspace_root", lambda: tmp_path)
 
     def print_side_effect(menu: str, proplist=None, queries=None, attrs=None):
         assert menu == "/file"
@@ -1097,8 +1100,8 @@ def test_system_backup_collect_resolves_relative_local_dir_from_workspace_root(
 
     result = system_backup_collect_impl(client, name_prefix="nightly", local_dir="backups", downloader=downloader)
 
-    assert result["local_backup_path"].startswith(str(WORKSPACE_ROOT / "backups" / "router-test-nightly-"))
-    assert result["local_export_path"].startswith(str(WORKSPACE_ROOT / "backups" / "router-test-nightly-"))
+    assert result["local_backup_path"].startswith(str(tmp_path / "backups" / "router-test-nightly-"))
+    assert result["local_export_path"].startswith(str(tmp_path / "backups" / "router-test-nightly-"))
 
 
 def test_system_backup_collect_skips_directory_creation_when_backups_exists(tmp_path: Path) -> None:
