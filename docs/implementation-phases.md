@@ -85,6 +85,8 @@ Why next:
 
 ## Phase 4: File Handling + Backup Workflow
 
+Status: done.
+
 Deliverables:
 
 - file listing helper
@@ -198,9 +200,9 @@ These apply in every phase:
 
 ## Recommended Immediate Next Steps
 
-1. Implement `resource_add`.
-2. Implement `resource_set`.
-3. Implement `resource_remove`.
-4. Implement `command_run`.
-5. Add tests for successful mutation and common RouterOS failures.
-6. Keep Phase 1 coverage passing while expanding to Phase 2.
+1. Implement bridge and VLAN tools.
+2. Implement firewall filter/NAT/address-list tools.
+3. Implement PPP and WireGuard tools.
+4. Add validation for destructive network changes.
+5. Add tests for rule ordering and id-based updates.
+6. Keep Phases 1-4 coverage passing while expanding to Phase 5.

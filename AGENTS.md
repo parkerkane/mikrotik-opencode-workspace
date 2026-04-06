@@ -2,7 +2,7 @@
 
 ## Scope
 - The only active code package is `packages/mcp-server/`. There is no root build/test manifest.
-- Current implementation scope is through Phase 3: generic read/mutation tools plus core operational read tools and DNS set support. Roadmap source: `docs/implementation-phases.md`.
+- Current implementation scope is through Phase 4: generic read/mutation tools, core operational read tools, DNS set support, router file download, and backup collection workflow. Roadmap source: `docs/implementation-phases.md`.
 
 ## Working Directory
 - Run Python install and test commands from `packages/mcp-server/`, not the repo root.
@@ -25,6 +25,10 @@
 - Optional transport env vars already wired: `MIKROTIK_API_SSL`, `MIKROTIK_API_PORT`, `MIKROTIK_TLS_VERIFY`.
 - TLS defaults to enabled; default port is `8729` when SSL is on, else `8728`.
 
+## Operational Shortcuts
+- If the user asks to "create backup" or "create and download backup", treat that as `system_backup_collect` with `name_prefix="backup"` unless the user specifies a different prefix.
+- Default local backup destination for that shortcut should be workspace-root `backups/`.
+
 ## Response Formatting
 - Default to human-friendly Markdown when presenting router data.
 - Use Markdown tables for tabular RouterOS results like users, interfaces, addresses, and routes.
@@ -37,4 +41,4 @@
 - Keep `jq_filter` behavior tool-side: `resource_print` applies it after RouterOS replies are normalized to JSON-like Python data.
 
 ## Near-Term Direction
-- If continuing feature work, Phase 4 is next: file handling, backups, exports, and backup collection workflow.
+- If continuing feature work, Phase 5 is next: bridge, VLAN, firewall, and VPN tooling.

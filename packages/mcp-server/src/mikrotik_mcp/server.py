@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import UTC, datetime
 import os
 from pathlib import Path
 import sys
@@ -10,7 +11,12 @@ from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 
 from .client import RouterOSClient
+from .downloads import FTPFileDownloader, FileDownloader, RouterFileDownloadError, load_file_transfer_settings
 from .filters import apply_jq_filter
+
+
+def _workspace_root() -> Path:
+    return Path(__file__).resolve().parents[4]
 
 
 def _stringify_value(value: Any) -> str:
@@ -82,6 +88,105 @@ def _file_exists_in_directory(file_name: str, directory: str) -> bool:
         return True
     normalized_name = file_name.strip().strip("/")
     return normalized_name == normalized_directory or normalized_name.startswith(f"{normalized_directory}/")
+
+
+def _normalize_local_directory(local_dir: str | None) -> Path:
+    workspace_root = _workspace_root()
+    if local_dir is None:
+        return workspace_root / "backups"
+    value = local_dir.strip()
+    if not value:
+        raise ValueError("local_dir must not be empty")
+    path = Path(value)
+    if path.is_absolute():
+        return path
+    return workspace_root / path
+
+
+def _normalize_router_file_path(router_path: str) -> str:
+    value = router_path.strip().strip("/")
+    if not value:
+        raise ValueError("router_path is required")
+    if value.endswith("/"):
+        raise ValueError("router_path must not end with '/'")
+    return value
+
+
+def _safe_name_component(value: str, *, default: str) -> str:
+    cleaned = "".join(char if char.isalnum() or char in {"-", "_"} else "-" for char in value.strip().lower())
+    collapsed = "-".join(part for part in cleaned.split("-") if part)
+    return collapsed or default
+
+
+def _unique_local_path(directory: Path, file_name: str) -> Path:
+    candidate = directory / file_name
+    if not candidate.exists():
+        return candidate
+
+    stem = candidate.stem
+    suffix = candidate.suffix
+    counter = 1
+    while True:
+        candidate = directory / f"{stem}-{counter}{suffix}"
+        if not candidate.exists():
+            return candidate
+        counter += 1
+
+
+def _build_backup_paths(
+    client: RouterOSClient,
+    *,
+    name_prefix: str | None,
+    local_dir: str | None,
+) -> dict[str, str | Path]:
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    prefix = _safe_name_component(name_prefix or "backup", default="backup")
+    router_name = f"backups/{prefix}-{timestamp}"
+    router_backup_path = f"{router_name}.backup"
+    router_export_path = f"{router_name}.rsc"
+    local_directory = _normalize_local_directory(local_dir)
+    router_slug = _safe_name_component(client.host, default="router")
+
+    return {
+        "created_at": timestamp,
+        "router_backup_path": router_backup_path,
+        "router_export_path": router_export_path,
+        "local_backup_path": _unique_local_path(local_directory, f"{router_slug}-{prefix}-{timestamp}.backup"),
+        "local_export_path": _unique_local_path(local_directory, f"{router_slug}-{prefix}-{timestamp}.rsc"),
+    }
+
+
+def _ensure_router_backup_directory(client: RouterOSClient) -> None:
+    matches = file_list_impl(client, name="backups")
+    if any(item.get("name") == "backups" and item.get("type") == "directory" for item in matches):
+        return
+    client.add("/file", attrs={"name": "backups", "type": "directory"})
+
+
+def _download_router_file(
+    client: RouterOSClient,
+    *,
+    router_path: str,
+    local_path: str | Path | None = None,
+    downloader: FileDownloader | None = None,
+) -> dict[str, str | bool]:
+    normalized_router_path = _normalize_router_file_path(router_path)
+    resolved_downloader = downloader
+    if resolved_downloader is None:
+        settings = load_file_transfer_settings(client.host)
+        resolved_downloader = FTPFileDownloader(settings)
+
+    if local_path is None:
+        target_path = _unique_local_path(_workspace_root() / "backups", Path(normalized_router_path).name)
+    else:
+        raw_target_path = Path(local_path)
+        target_path = raw_target_path if raw_target_path.is_absolute() else _workspace_root() / raw_target_path
+    resolved_downloader.download_file(normalized_router_path, target_path)
+    return {
+        "success": True,
+        "router_path": normalized_router_path,
+        "local_path": str(target_path),
+    }
 
 
 def resource_print_impl(
@@ -326,6 +431,67 @@ def system_export_impl(
     }
 
 
+def file_download_impl(
+    client: RouterOSClient,
+    *,
+    router_path: str,
+    local_path: str | None = None,
+    downloader: FileDownloader | None = None,
+) -> dict[str, str | bool]:
+    return _download_router_file(client, router_path=router_path, local_path=local_path, downloader=downloader)
+
+
+def system_backup_collect_impl(
+    client: RouterOSClient,
+    *,
+    name_prefix: str | None = None,
+    include_sensitive: bool = False,
+    compact: bool = False,
+    local_dir: str | None = None,
+    downloader: FileDownloader | None = None,
+) -> dict[str, str | bool]:
+    paths = _build_backup_paths(client, name_prefix=name_prefix, local_dir=local_dir)
+    router_backup_path = str(paths["router_backup_path"])
+    router_export_path = str(paths["router_export_path"])
+    local_backup_path = Path(paths["local_backup_path"])
+    local_export_path = Path(paths["local_export_path"])
+
+    _ensure_router_backup_directory(client)
+    system_backup_save_impl(client, name=router_backup_path)
+    try:
+        system_export_impl(client, name=router_export_path, include_sensitive=include_sensitive, compact=compact)
+    except Exception as exc:
+        raise RuntimeError(
+            f"Router backup created at '{router_backup_path}', but export creation failed before downloads started: {exc}"
+        ) from exc
+
+    backup_files = file_list_impl(client, directory="backups")
+    available_paths = {item.get("name") for item in backup_files}
+    missing_paths = [path for path in (router_backup_path, router_export_path) if path not in available_paths]
+    if missing_paths:
+        raise RuntimeError(f"Expected router backup files were not found: {', '.join(missing_paths)}")
+
+    try:
+        _download_router_file(client, router_path=router_backup_path, local_path=local_backup_path, downloader=downloader)
+        _download_router_file(client, router_path=router_export_path, local_path=local_export_path, downloader=downloader)
+    except RouterFileDownloadError as exc:
+        raise RuntimeError(
+            "Backup files were created on the router, but local download failed. "
+            f"backup_local='{local_backup_path}', export_local='{local_export_path}': {exc}"
+        ) from exc
+
+    return {
+        "success": True,
+        "created_at": str(paths["created_at"]),
+        "router_backup_path": router_backup_path,
+        "router_export_path": router_export_path,
+        "local_backup_path": str(local_backup_path),
+        "local_export_path": str(local_export_path),
+        "include_sensitive": include_sensitive,
+        "compact": compact,
+    }
+
+
 def create_app(client: RouterOSClient) -> FastMCP:
     app = FastMCP("mikrotik")
 
@@ -485,11 +651,33 @@ def create_app(client: RouterOSClient) -> FastMCP:
     ) -> dict[str, str | bool]:
         return system_export_impl(client, name=name, include_sensitive=include_sensitive, compact=compact)
 
+    @app.tool(description="Download a router file into the local workspace.")
+    def file_download(
+        router_path: str,
+        local_path: str | None = None,
+    ) -> dict[str, str | bool]:
+        return file_download_impl(client, router_path=router_path, local_path=local_path)
+
+    @app.tool(description="Create router backup artifacts and download them into the local workspace.")
+    def system_backup_collect(
+        name_prefix: str | None = None,
+        include_sensitive: bool = False,
+        compact: bool = False,
+        local_dir: str | None = None,
+    ) -> dict[str, str | bool]:
+        return system_backup_collect_impl(
+            client,
+            name_prefix=name_prefix,
+            include_sensitive=include_sensitive,
+            compact=compact,
+            local_dir=local_dir,
+        )
+
     return app
 
 
 def load_settings(host: str) -> RouterOSClient:
-    workspace_root = Path(__file__).resolve().parents[4]
+    workspace_root = _workspace_root()
     load_dotenv(workspace_root / ".env")
 
     username = os.getenv("MIKROTIK_USER")

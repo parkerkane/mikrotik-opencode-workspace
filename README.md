@@ -106,12 +106,11 @@ Current phases expose these MCP tools:
 
 ## Next
 
-Phase 4 is next:
+Phase 5 is next:
 
-- file listing helper
-- file download helper
-- `system_backup_save`
-- `system_export`
-- `system_backup_collect`
+- bridge and VLAN tools
+- firewall filter/NAT/address-list tools
+- PPP tools
+- WireGuard tools
 
 See `docs/implementation-phases.md` for the full roadmap.

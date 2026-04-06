@@ -266,7 +266,11 @@ class RouterOSClient:
         if length == 0:
             return ""
         data = self._read_exact(length)
-        return data.decode("utf-8")
+        try:
+            return data.decode("utf-8")
+        except UnicodeDecodeError:
+            # RouterOS file metadata can contain bytes that are not valid UTF-8.
+            return data.decode("latin-1")
 
     def read(self, size: int) -> bytes:
         return self._read_exact(size)

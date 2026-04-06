@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
 
+from mikrotik_mcp.downloads import RouterFileDownloadError
 from mikrotik_mcp.server import (
     command_run_impl,
     dhcp_lease_list_impl,
@@ -11,6 +13,7 @@ from mikrotik_mcp.server import (
     dhcp_server_list_impl,
     dns_get_impl,
     dns_set_impl,
+    file_download_impl,
     file_list_impl,
     interface_get_impl,
     interface_list_impl,
@@ -22,12 +25,30 @@ from mikrotik_mcp.server import (
     resource_print_impl,
     resource_remove_impl,
     resource_set_impl,
+    system_backup_collect_impl,
     system_backup_save_impl,
     system_clock_get_impl,
     system_export_impl,
     system_identity_get_impl,
     system_resource_get_impl,
 )
+
+
+WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
+
+
+class RecordingDownloader:
+    def __init__(self, *, fail_on_call: int | None = None) -> None:
+        self.fail_on_call = fail_on_call
+        self.calls: list[tuple[str, Path]] = []
+
+    def download_file(self, router_path: str, local_path: str | Path) -> None:
+        path = Path(local_path)
+        self.calls.append((router_path, path))
+        if self.fail_on_call == len(self.calls):
+            raise RouterFileDownloadError("download failed")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"artifact")
 
 
 def test_resource_print_calls_client_and_returns_normalized_items() -> None:
@@ -381,3 +402,200 @@ def test_system_export_rejects_name_ending_in_directory_separator() -> None:
 
     with pytest.raises(ValueError, match="name must not end with '/'"):
         system_export_impl(client, name="backups/")
+
+
+def test_file_download_uses_explicit_local_path(tmp_path: Path) -> None:
+    client = Mock(host="router.test")
+    downloader = RecordingDownloader()
+    destination = tmp_path / "artifacts" / "router.backup"
+
+    result = file_download_impl(
+        client,
+        router_path="backups/router.backup",
+        local_path=str(destination),
+        downloader=downloader,
+    )
+
+    assert result == {
+        "success": True,
+        "router_path": "backups/router.backup",
+        "local_path": str(destination),
+    }
+    assert downloader.calls == [("backups/router.backup", destination)]
+
+
+def test_file_download_defaults_to_local_backups_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    client = Mock(host="router.test")
+    downloader = RecordingDownloader()
+    monkeypatch.chdir(tmp_path)
+    router_path = "backups/pytest-unique-router.backup"
+
+    result = file_download_impl(client, router_path=router_path, downloader=downloader)
+
+    expected_path = WORKSPACE_ROOT / "backups" / "pytest-unique-router.backup"
+    assert result == {
+        "success": True,
+        "router_path": router_path,
+        "local_path": str(expected_path),
+    }
+    assert downloader.calls == [(router_path, expected_path)]
+
+
+def test_file_download_resolves_relative_local_path_from_workspace_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    client = Mock(host="router.test")
+    downloader = RecordingDownloader()
+    monkeypatch.chdir(tmp_path)
+
+    result = file_download_impl(
+        client,
+        router_path="backups/router.backup",
+        local_path="backups/custom/router.backup",
+        downloader=downloader,
+    )
+
+    expected_path = WORKSPACE_ROOT / "backups" / "custom" / "router.backup"
+    assert result == {
+        "success": True,
+        "router_path": "backups/router.backup",
+        "local_path": str(expected_path),
+    }
+    assert downloader.calls == [("backups/router.backup", expected_path)]
+
+
+def test_system_backup_collect_creates_and_downloads_both_artifacts(tmp_path: Path) -> None:
+    client = Mock(host="router.test")
+    client.add.return_value = {"success": True}
+    client.run.return_value = {"success": True}
+    downloader = RecordingDownloader()
+
+    def print_side_effect(menu: str, proplist=None, queries=None, attrs=None):
+        assert menu == "/file"
+        if queries == ["name=backups"]:
+            return []
+        backup_name = client.run.call_args_list[0].kwargs["attrs"]["name"]
+        export_name = client.run.call_args_list[1].kwargs["attrs"]["file"]
+        return [
+            {"name": f"{backup_name}.backup", "type": "backup"},
+            {"name": f"{export_name}.rsc", "type": "script"},
+        ]
+
+    client.print.side_effect = print_side_effect
+
+    result = system_backup_collect_impl(
+        client,
+        name_prefix="nightly",
+        include_sensitive=True,
+        compact=True,
+        local_dir=str(tmp_path / "artifacts"),
+        downloader=downloader,
+    )
+
+    assert result["success"] is True
+    assert result["router_backup_path"].startswith("backups/nightly-")
+    assert result["router_backup_path"].endswith(".backup")
+    assert result["router_export_path"].startswith("backups/nightly-")
+    assert result["router_export_path"].endswith(".rsc")
+    assert result["local_backup_path"].startswith(str(tmp_path / "artifacts" / "router-test-nightly-"))
+    assert result["local_backup_path"].endswith(".backup")
+    assert result["local_export_path"].startswith(str(tmp_path / "artifacts" / "router-test-nightly-"))
+    assert result["local_export_path"].endswith(".rsc")
+    assert downloader.calls == [
+        (result["router_backup_path"], Path(result["local_backup_path"])),
+        (result["router_export_path"], Path(result["local_export_path"])),
+    ]
+    client.add.assert_called_once_with("/file", attrs={"name": "backups", "type": "directory"})
+    assert client.run.call_count == 2
+    client.run.assert_any_call("/system/backup/save", attrs={"name": result["router_backup_path"][:-7]})
+    client.run.assert_any_call(
+        "/export",
+        attrs={
+            "file": result["router_export_path"][:-4],
+            "show-sensitive": "",
+            "compact": "",
+        },
+    )
+
+
+def test_system_backup_collect_resolves_relative_local_dir_from_workspace_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = Mock(host="router.test")
+    client.run.return_value = {"success": True}
+    downloader = RecordingDownloader()
+    monkeypatch.chdir(tmp_path)
+
+    def print_side_effect(menu: str, proplist=None, queries=None, attrs=None):
+        assert menu == "/file"
+        if queries == ["name=backups"]:
+            return [{"name": "backups", "type": "directory"}]
+        backup_name = client.run.call_args_list[0].kwargs["attrs"]["name"]
+        export_name = client.run.call_args_list[1].kwargs["attrs"]["file"]
+        return [
+            {"name": f"{backup_name}.backup", "type": "backup"},
+            {"name": f"{export_name}.rsc", "type": "script"},
+        ]
+
+    client.print.side_effect = print_side_effect
+
+    result = system_backup_collect_impl(client, name_prefix="nightly", local_dir="backups", downloader=downloader)
+
+    assert result["local_backup_path"].startswith(str(WORKSPACE_ROOT / "backups" / "router-test-nightly-"))
+    assert result["local_export_path"].startswith(str(WORKSPACE_ROOT / "backups" / "router-test-nightly-"))
+
+
+def test_system_backup_collect_skips_directory_creation_when_backups_exists(tmp_path: Path) -> None:
+    client = Mock(host="router.test")
+    client.run.return_value = {"success": True}
+
+    def print_side_effect(menu: str, proplist=None, queries=None, attrs=None):
+        assert menu == "/file"
+        if queries == ["name=backups"]:
+            return [{"name": "backups", "type": "directory"}]
+        backup_name = client.run.call_args_list[0].kwargs["attrs"]["name"]
+        export_name = client.run.call_args_list[1].kwargs["attrs"]["file"]
+        return [
+            {"name": f"{backup_name}.backup", "type": "backup"},
+            {"name": f"{export_name}.rsc", "type": "script"},
+        ]
+
+    client.print.side_effect = print_side_effect
+
+    system_backup_collect_impl(client, local_dir=str(tmp_path), downloader=RecordingDownloader())
+
+    client.add.assert_not_called()
+
+
+def test_system_backup_collect_stops_when_export_creation_fails(tmp_path: Path) -> None:
+    client = Mock(host="router.test")
+    client.print.return_value = [{"name": "backups", "type": "directory"}]
+    client.run.side_effect = [{"success": True}, RuntimeError("disk full")]
+    downloader = RecordingDownloader()
+
+    with pytest.raises(RuntimeError, match="export creation failed before downloads started"):
+        system_backup_collect_impl(client, local_dir=str(tmp_path), downloader=downloader)
+
+    assert downloader.calls == []
+
+
+def test_system_backup_collect_reports_download_failure_with_paths(tmp_path: Path) -> None:
+    client = Mock(host="router.test")
+    client.run.return_value = {"success": True}
+    downloader = RecordingDownloader(fail_on_call=2)
+
+    def print_side_effect(menu: str, proplist=None, queries=None, attrs=None):
+        assert menu == "/file"
+        if queries == ["name=backups"]:
+            return [{"name": "backups", "type": "directory"}]
+        backup_name = client.run.call_args_list[0].kwargs["attrs"]["name"]
+        export_name = client.run.call_args_list[1].kwargs["attrs"]["file"]
+        return [
+            {"name": f"{backup_name}.backup", "type": "backup"},
+            {"name": f"{export_name}.rsc", "type": "script"},
+        ]
+
+    client.print.side_effect = print_side_effect
+
+    with pytest.raises(RuntimeError, match="local download failed"):
+        system_backup_collect_impl(client, local_dir=str(tmp_path), downloader=downloader)
+
+    assert len(downloader.calls) == 2

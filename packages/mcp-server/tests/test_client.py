@@ -157,6 +157,13 @@ def test_command_run_returns_done_payload_without_records(client: RouterOSClient
     assert result == {"ret": "ok"}
 
 
+def test_read_word_falls_back_to_latin1_for_non_utf8_router_data(client: RouterOSClient, fake_socket) -> None:
+    fake_socket.response_bytes.extend(b"\x01\xf3")
+    client._socket = fake_socket
+
+    assert client.read_word() == "ó"
+
+
 def test_mutation_trap_raises_clear_routeros_error(client: RouterOSClient, fake_socket) -> None:
     fake_socket.response_bytes.extend(client.encode_sentence(["!trap", "=category=1", "=message=failure"]))
     fake_socket.response_bytes.extend(client.encode_sentence(["!done"]))
