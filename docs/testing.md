@@ -16,8 +16,8 @@
 ## Recommended Test Layout
 
 ```
-tools/mikrotik-mcp/
-├── src/
+tools/mikrotik/
+├── mikrotik_mcp/
 └── tests/
     ├── conftest.py
     ├── test_client.py

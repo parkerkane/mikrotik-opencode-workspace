@@ -5,7 +5,7 @@ This directory stores generated live smoke reports for read-only MikroTik MCP co
 Usage from the repository root:
 
 ```bash
-python tools/mikrotik-mcp/scripts/live_smoke_read_only.py <router-host>
+python tools/mikrotik/scripts/live_smoke_read_only.py <router-host>
 ```
 
 The runner writes two files per execution:

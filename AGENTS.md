@@ -1,7 +1,7 @@
 # AGENTS
 
 ## Scope
-- The only active code package is `tools/mikrotik-mcp/`.
+- The only active code package is `tools/mikrotik/`.
 - Current implementation scope is through Phase 8: generic read/mutation tools, core operational read tools, DNS set support, router file download, backup collection workflow, bridge/VLAN/firewall/PPP/WireGuard tooling, long-running command support, response formatting tightening, and dedicated operational command wrappers including ping, traceroute, and DNS resolve. Roadmap source: `docs/implementation-phases.md`.
 
 ## Working Directory
@@ -10,16 +10,15 @@
 ## Verified Commands
 - Install runtime + test deps: `pip install -r requirements.txt`
 - Run full test suite: `pytest`
-- Run one focused test: `pytest tools/mikrotik-mcp/tests/test_server.py -k invalid_jq_filter`
+- Run one focused test: `pytest tools/mikrotik/tests/test_server.py -k invalid_jq_filter`
 
 ## Entry Points
-- OpenCode/MCP entry script: `tools/mikrotik-mcp/src/main.py`
-- Real server wiring lives in `tools/mikrotik-mcp/src/mikrotik_mcp/server.py`
-- RouterOS protocol/client logic lives in `tools/mikrotik-mcp/src/mikrotik_mcp/client.py`
-- Top-level `src/main.py`, `src/server.py`, and `src/client.py` are thin compatibility wrappers.
+- OpenCode/MCP entry script: `tools/mikrotik/main.py`
+- Real server wiring lives in `tools/mikrotik/mikrotik_mcp/server.py`
+- RouterOS protocol/client logic lives in `tools/mikrotik/mikrotik_mcp/client.py`
 
 ## Runtime Gotchas
-- `main.py` requires the router host as CLI arg: `python tools/mikrotik-mcp/src/main.py <host>`.
+- `main.py` requires the router host as CLI arg: `python tools/mikrotik/main.py <host>`.
 - Startup loads `.env` from the workspace root.
 - Required env vars: `MIKROTIK_USER`, `MIKROTIK_PASSWORD`.
 - Optional transport env vars already wired: `MIKROTIK_API_SSL`, `MIKROTIK_API_PORT`, `MIKROTIK_TLS_VERIFY`.
@@ -37,7 +36,7 @@
 
 ## Testing Conventions
 - `pytest` is configured with `--disable-socket` in root `pytest.ini`; default tests must stay fully mocked.
-- Existing tests use `FakeSocket` in `tools/mikrotik-mcp/tests/conftest.py` for client transport tests and `Mock()` for tool-layer tests.
+- Existing tests use `FakeSocket` in `tools/mikrotik/tests/conftest.py` for client transport tests and `Mock()` for tool-layer tests.
 - Keep `jq_filter` behavior tool-side: `resource_print` applies it after RouterOS replies are normalized to JSON-like Python data.
 
 ## Near-Term Direction

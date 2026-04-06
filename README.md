@@ -6,7 +6,7 @@ MikroTik Manager is an OpenCode workspace for managing MikroTik routers through 
 
 Licensed under the Apache License, Version 2.0. See `LICENSE`.
 
-Current status: Phases 1-5 are implemented in `tools/mikrotik-mcp/`.
+Current status: Phases 1-5 are implemented in `tools/mikrotik/`.
 
 Implemented today:
 - RouterOS API client over TCP/TLS
@@ -22,10 +22,10 @@ Implemented today:
 
 ## Layout
 
-- `tools/mikrotik-mcp/`: active MCP server project
-- `tools/mikrotik-mcp/src/main.py`: MCP entry script
-- `tools/mikrotik-mcp/src/mikrotik_mcp/server.py`: server wiring and `resource_print`
-- `tools/mikrotik-mcp/src/mikrotik_mcp/client.py`: RouterOS transport and protocol logic
+- `tools/mikrotik/`: active MCP server project
+- `tools/mikrotik/main.py`: MCP entry script
+- `tools/mikrotik/mikrotik_mcp/server.py`: server wiring and `resource_print`
+- `tools/mikrotik/mikrotik_mcp/client.py`: RouterOS transport and protocol logic
 - `docs/implementation-phases.md`: delivery roadmap
 
 ## Requirements
@@ -57,14 +57,14 @@ Create or activate a Python environment, then install dependencies from the repo
 pip install -r requirements.txt
 ```
 
-Packaging metadata for publishing is defined in `tools/mikrotik-mcp/pyproject.toml` and uses the Apache-2.0 license.
+Packaging metadata for publishing is defined in `tools/mikrotik/pyproject.toml` and uses the Apache-2.0 license.
 
 ## Run The MCP Server
 
 From the repository root:
 
 ```bash
-python tools/mikrotik-mcp/src/main.py <router-host>
+python tools/mikrotik/main.py <router-host>
 ```
 
 The host argument is required.
@@ -78,20 +78,20 @@ pytest
 Run one focused test:
 
 ```bash
-pytest tools/mikrotik-mcp/tests/test_server.py -k invalid_jq_filter
+pytest tools/mikrotik/tests/test_server.py -k invalid_jq_filter
 ```
 
 Testing notes:
 - `pytest` runs with `--disable-socket`, so default tests must stay fully mocked.
-- Client transport tests use `FakeSocket` in `tools/mikrotik-mcp/tests/conftest.py`.
+- Client transport tests use `FakeSocket` in `tools/mikrotik/tests/conftest.py`.
 
 Live smoke test for read-only commands:
 
 ```bash
-python tools/mikrotik-mcp/scripts/live_smoke_read_only.py <router-host>
+python tools/mikrotik/scripts/live_smoke_read_only.py <router-host>
 ```
 
-Reports are written to `tools/mikrotik-mcp/reports/live-smoke/` as both JSON and Markdown.
+Reports are written to `tools/mikrotik/reports/live-smoke/` as both JSON and Markdown.
 
 ## Tool Surface
 

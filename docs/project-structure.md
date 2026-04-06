@@ -19,29 +19,17 @@ manager-oc/
 ├── requirements.txt              # Runtime and test dependencies
 ├── pytest.ini                    # Root pytest configuration
 └── tools/
-    └── mikrotik-mcp/             # The MCP server project
-        ├── src/
-        │   ├── main.py           # Entry point — parse args, load .env, start server
+    └── mikrotik/                 # The MCP server project
+        ├── main.py               # Entry point — parse args, load .env, start server
+        ├── mikrotik_mcp/
         │   ├── server.py         # MCP server setup, tool registration
         │   ├── client.py         # RouterOS API client (login, sentence transport)
-        │   └── tools/
-        │       ├── system.py     # system_* tools
-        │       ├── interface.py  # interface_* tools
-        │       ├── ip_address.py # ip_address_* tools
-        │       ├── ip_route.py   # ip_route_* tools
-        │       ├── dhcp.py       # dhcp_* tools
-        │       ├── firewall.py   # firewall_* tools
-        │       ├── dns.py        # dns_* tools
-        │       ├── wireless.py   # wireless_* tools
-        │       ├── backup.py     # composite backup collection tool
-        │       └── diagnostics.py# tool_ping, tool_traceroute, etc.
+        │   ├── app.py            # FastMCP app and tool registration
+        │   └── tool_impls/       # Tool implementation modules
         └── tests/
             ├── conftest.py       # Shared pytest fixtures
             ├── test_client.py    # API client behavior and error handling
-            ├── test_server.py    # MCP registration and dispatch
-            └── tools/
-                ├── test_system.py# Per-tool behavior with mocked client
-                └── test_backup.py# Composite backup workflow behavior
+            └── test_server.py    # MCP registration and dispatch
 ```
 
 ## Key Files
@@ -64,7 +52,7 @@ MIKROTIK_API_PORT=8729
 MIKROTIK_TLS_VERIFY=false
 ```
 
-### `tools/mikrotik-mcp/src/main.py`
+### `tools/mikrotik/main.py`
 Entry point responsibilities:
 1. Read `sys.argv[1]` for the router host (required)
 2. Load `.env` from the workspace root via `python-dotenv`
@@ -72,7 +60,7 @@ Entry point responsibilities:
 4. Instantiate the RouterOS API client with host + credentials
 5. Start the MCP server on stdio
 
-### `tools/mikrotik-mcp/src/client.py`
+### `tools/mikrotik/mikrotik_mcp/client.py`
 RouterOS API client responsibilities:
 1. Open a socket to the router on `8728` or `8729`
 2. Perform `/login` with username and password

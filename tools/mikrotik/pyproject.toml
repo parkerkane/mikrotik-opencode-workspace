@@ -31,8 +31,7 @@ classifiers = [
 mikrotik-mcp = "mikrotik_mcp.server:main"
 
 [tool.setuptools]
-package-dir = {"" = "src"}
 license-files = ["../../LICENSE", "../../NOTICE"]
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["."]

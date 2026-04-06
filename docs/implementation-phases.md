@@ -10,7 +10,7 @@ Status: done.
 
 Deliverables:
 
-- Python package scaffold under `tools/mikrotik-mcp/`
+- Python package scaffold under `tools/mikrotik/`
 - RouterOS API client with:
   - socket connect
   - `/login`
