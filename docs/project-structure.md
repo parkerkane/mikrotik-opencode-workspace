@@ -6,7 +6,7 @@ manager-oc/
 ├── .env                          # Credentials (git-ignored)
 ├── .env.example                  # Template — safe to commit
 ├── .gitignore
-├── .mcp.json                     # OpenCode project-scope MCP config
+├── opencode.json                 # OpenCode project-scope config, including MCP
 │
 ├── docs/
 │   ├── architecture.md           # System architecture overview

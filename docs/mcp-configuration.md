@@ -1,26 +1,21 @@
 # OpenCode MCP Configuration
 
-## Project-scope MCP config: `.mcp.json`
+## Project-scope MCP config: `opencode.json`
 
-Placed at the workspace root, `.mcp.json` is picked up automatically by OpenCode for this project only.
+Placed at the workspace root, `opencode.json` is picked up automatically by OpenCode for this project only.
 
 ```json
 {
-  "mcpServers": {
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
     "mikrotik": {
-      "type": "stdio",
-      "command": "python",
-      "args": [
+      "type": "local",
+      "command": [
+        "python",
         "packages/mcp-server/src/main.py",
         "192.168.88.1"
       ],
-      "env": {
-        "MIKROTIK_USER": "${MIKROTIK_USER}",
-        "MIKROTIK_PASSWORD": "${MIKROTIK_PASSWORD}",
-        "MIKROTIK_API_SSL": "${MIKROTIK_API_SSL}",
-        "MIKROTIK_API_PORT": "${MIKROTIK_API_PORT}",
-        "MIKROTIK_TLS_VERIFY": "${MIKROTIK_TLS_VERIFY}"
-      }
+      "enabled": true
     }
   }
 }
@@ -28,9 +23,9 @@ Placed at the workspace root, `.mcp.json` is picked up automatically by OpenCode
 
 ### Key points
 
-- **`type: "stdio"`** — OpenCode spawns the Python process and communicates over stdin/stdout.
-- **`args[1]`** — the router host (`192.168.88.1` above). Change this to target a different router without touching credentials.
-- **`env`** — the API credentials and transport vars are forwarded from the shell environment. Populate them via `.env` before starting OpenCode, or export them in your shell profile.
+- **`type: "local"`** — OpenCode spawns the Python process locally and communicates over stdin/stdout.
+- **`command[2]`** — the router host (`192.168.88.1` above). Change this to target a different router without touching credentials.
+- **No `environment` block is required** — this MCP server already loads `.env` from the workspace root on startup.
 
 ### Passing credentials via `.env`
 
@@ -45,7 +40,7 @@ MIKROTIK_API_PORT=8729
 MIKROTIK_TLS_VERIFY=false
 ```
 
-> The `env` block in `.mcp.json` is a belt-and-suspenders approach: values come from the shell if exported, and from `.env` if not. The MCP server's startup code handles the `.env` fallback directly.
+> This server loads `.env` itself on startup, so duplicating `MIKROTIK_*` values in `opencode.json` is unnecessary.
 
 ## Managing multiple routers
 
@@ -53,30 +48,17 @@ Add additional server entries with different names and hosts:
 
 ```json
 {
-  "mcpServers": {
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
     "mikrotik-core": {
-      "type": "stdio",
-      "command": "python",
-      "args": ["packages/mcp-server/src/main.py", "10.0.0.1"],
-      "env": {
-        "MIKROTIK_USER": "${MIKROTIK_USER}",
-        "MIKROTIK_PASSWORD": "${MIKROTIK_PASSWORD}",
-        "MIKROTIK_API_SSL": "${MIKROTIK_API_SSL}",
-        "MIKROTIK_API_PORT": "${MIKROTIK_API_PORT}",
-        "MIKROTIK_TLS_VERIFY": "${MIKROTIK_TLS_VERIFY}"
-      }
+      "type": "local",
+      "command": ["python", "packages/mcp-server/src/main.py", "10.0.0.1"],
+      "enabled": true
     },
     "mikrotik-branch": {
-      "type": "stdio",
-      "command": "python",
-      "args": ["packages/mcp-server/src/main.py", "10.1.0.1"],
-      "env": {
-        "MIKROTIK_USER": "${MIKROTIK_USER}",
-        "MIKROTIK_PASSWORD": "${MIKROTIK_PASSWORD}",
-        "MIKROTIK_API_SSL": "${MIKROTIK_API_SSL}",
-        "MIKROTIK_API_PORT": "${MIKROTIK_API_PORT}",
-        "MIKROTIK_TLS_VERIFY": "${MIKROTIK_TLS_VERIFY}"
-      }
+      "type": "local",
+      "command": ["python", "packages/mcp-server/src/main.py", "10.1.0.1"],
+      "enabled": true
     }
   }
 }

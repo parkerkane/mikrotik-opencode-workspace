@@ -38,7 +38,7 @@ An OpenCode workspace for managing MikroTik routers via an MCP (Model Context Pr
 - Router host: passed as first CLI argument (`python packages/mcp-server/src/main.py <host>`)
 - Router transport: RouterOS API over TCP, optionally TLS on `8729`
 
-### 2. OpenCode Project Configuration (`.mcp.json`)
+### 2. OpenCode Project Configuration (`opencode.json`)
 - Declares the MCP server at project scope
 - Wires the CLI argument (host) and inherits env vars from the shell
 
@@ -92,4 +92,4 @@ Default connection settings:
 
 ## Scalability
 
-Multiple routers can be managed by launching separate MCP server instances, each with a different host argument. OpenCode supports multiple MCP servers in `.mcp.json`.
+Multiple routers can be managed by launching separate MCP server instances, each with a different host argument. OpenCode supports multiple MCP servers in `opencode.json`.

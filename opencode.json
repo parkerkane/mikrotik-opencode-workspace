@@ -1,0 +1,14 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "mikrotik": {
+      "type": "local",
+      "command": [
+        "python",
+        "packages/mcp-server/src/main.py",
+        "router.local"
+      ],
+      "enabled": true
+    }
+  }
+}
