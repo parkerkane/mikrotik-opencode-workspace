@@ -1,0 +1,2137 @@
+{
+  "cases": [
+    {
+      "command": "resource_print",
+      "duration_ms": 4.46,
+      "label": "interface by name",
+      "status": "passed",
+      "summary": {
+        "count": 1,
+        "kind": "list",
+        "sample_keys": [
+          ".id",
+          "name"
+        ]
+      }
+    },
+    {
+      "command": "resource_print",
+      "duration_ms": 1.5,
+      "label": "bridge addresses",
+      "status": "passed",
+      "summary": {
+        "count": 1,
+        "kind": "list",
+        "sample_keys": [
+          "address",
+          "interface"
+        ]
+      }
+    },
+    {
+      "command": "resource_print",
+      "duration_ms": 3.07,
+      "label": "ppp secret by name",
+      "status": "passed",
+      "summary": {
+        "count": 1,
+        "kind": "list",
+        "sample_keys": [
+          "name",
+          "service"
+        ]
+      }
+    },
+    {
+      "command": "resource_listen",
+      "duration_ms": 10136.32,
+      "error": "RouterOSTransportError: RouterOS API read timed out",
+      "label": "interface listen",
+      "status": "failed"
+    },
+    {
+      "command": "resource_listen",
+      "duration_ms": 10129.32,
+      "error": "RouterOSTransportError: RouterOS API read timed out",
+      "label": "ip address listen",
+      "status": "failed"
+    },
+    {
+      "command": "resource_listen",
+      "duration_ms": 10124.26,
+      "error": "RouterOSTransportError: RouterOS API read timed out",
+      "label": "file listen",
+      "status": "failed"
+    },
+    {
+      "command": "tool_ping",
+      "duration_ms": 133.79,
+      "label": "default route gateway",
+      "status": "passed",
+      "summary": {
+        "count": 1,
+        "kind": "list",
+        "sample_keys": [
+          "avg-rtt",
+          "host",
+          "max-rtt",
+          "min-rtt",
+          "packet-loss",
+          "received",
+          "sent",
+          "seq",
+          "size",
+          "time",
+          "ttl"
+        ]
+      }
+    },
+    {
+      "command": "tool_ping",
+      "duration_ms": 124.19,
+      "label": "router lan ip",
+      "status": "passed",
+      "summary": {
+        "count": 1,
+        "kind": "list",
+        "sample_keys": [
+          "avg-rtt",
+          "host",
+          "max-rtt",
+          "min-rtt",
+          "packet-loss",
+          "received",
+          "sent",
+          "seq",
+          "size",
+          "time",
+          "ttl"
+        ]
+      }
+    },
+    {
+      "command": "tool_ping",
+      "duration_ms": 127.64,
+      "label": "public dns",
+      "status": "passed",
+      "summary": {
+        "count": 1,
+        "kind": "list",
+        "sample_keys": [
+          "avg-rtt",
+          "host",
+          "max-rtt",
+          "min-rtt",
+          "packet-loss",
+          "received",
+          "sent",
+          "seq",
+          "size",
+          "time",
+          "ttl"
+        ]
+      }
+    },
+    {
+      "command": "tool_traceroute",
+      "duration_ms": 222.5,
+      "label": "default route gateway",
+      "status": "passed",
+      "summary": {
+        "count": 1,
+        "kind": "list",
+        "sample_keys": [
+          ".section",
+          "address",
+          "avg",
+          "best",
+          "last",
+          "loss",
+          "sent",
+          "status",
+          "std-dev",
+          "worst"
+        ]
+      }
+    },
+    {
+      "command": "tool_traceroute",
+      "duration_ms": 2166.2,
+      "label": "public dns",
+      "status": "passed",
+      "summary": {
+        "count": 9,
+        "kind": "list",
+        "sample_keys": [
+          ".section",
+          "address",
+          "last",
+          "loss",
+          "sent",
+          "status"
+        ]
+      }
+    },
+    {
+      "command": "tool_traceroute",
+      "duration_ms": 217.7,
+      "label": "router lan ip",
+      "status": "passed",
+      "summary": {
+        "count": 1,
+        "kind": "list",
+        "sample_keys": [
+          ".section",
+          "address",
+          "avg",
+          "best",
+          "last",
+          "loss",
+          "sent",
+          "status",
+          "std-dev",
+          "worst"
+        ]
+      }
+    },
+    {
+      "command": "dns_resolve",
+      "duration_ms": 123.9,
+      "label": "example.com",
+      "status": "passed",
+      "summary": {
+        "keys": [
+          "address",
+          "name"
+        ],
+        "kind": "dict"
+      }
+    },
+    {
+      "command": "dns_resolve",
+      "duration_ms": 124.39,
+      "label": "cloudflare via 1.1.1.1",
+      "status": "passed",
+      "summary": {
+        "keys": [
+          "address",
+          "name",
+          "server"
+        ],
+        "kind": "dict"
+      }
+    },
+    {
+      "command": "dns_resolve",
+      "duration_ms": 126.83,
+      "label": "routeros via 9.9.9.9",
+      "status": "passed",
+      "summary": {
+        "keys": [
+          "address",
+          "name",
+          "server"
+        ],
+        "kind": "dict"
+      }
+    },
+    {
+      "command": "interface_monitor",
+      "duration_ms": 128.85,
+      "label": "primary interface",
+      "status": "passed",
+      "summary": {
+        "keys": [
+          "fp-rx-bits-per-second",
+          "fp-rx-packets-per-second",
+          "fp-tx-bits-per-second",
+          "fp-tx-packets-per-second",
+          "name",
+          "rx-bits-per-second",
+          "rx-packets-per-second",
+          "tx-bits-per-second",
+          "tx-packets-per-second",
+          "tx-queue-drops-per-second"
+        ],
+        "kind": "dict"
+      }
+    },
+    {
+      "command": "interface_monitor",
+      "duration_ms": 120.43,
+      "label": "bridge",
+      "status": "passed",
+      "summary": {
+        "keys": [
+          "fp-rx-bits-per-second",
+          "fp-rx-packets-per-second",
+          "fp-tx-bits-per-second",
+          "fp-tx-packets-per-second",
+          "name",
+          "rx-bits-per-second",
+          "rx-drops-per-second",
+          "rx-errors-per-second",
+          "rx-packets-per-second",
+          "tx-bits-per-second",
+          "tx-drops-per-second",
+          "tx-errors-per-second",
+          "tx-packets-per-second",
+          "tx-queue-drops-per-second"
+        ],
+        "kind": "dict"
+      }
+    },
+    {
+      "command": "interface_monitor",
+      "duration_ms": 112.7,
+      "label": "wireguard",
+      "status": "passed",
+      "summary": {
+        "keys": [
+          "fp-rx-bits-per-second",
+          "fp-rx-packets-per-second",
+          "fp-tx-bits-per-second",
+          "fp-tx-packets-per-second",
+          "name",
+          "rx-bits-per-second",
+          "rx-drops-per-second",
+          "rx-errors-per-second",
+          "rx-packets-per-second",
+          "tx-bits-per-second",
+          "tx-drops-per-second",
+          "tx-errors-per-second",
+          "tx-packets-per-second",
+          "tx-queue-drops-per-second"
+        ],
+        "kind": "dict"
+      }
+    },
+    {
+      "command": "system_resource_get",
+      "duration_ms": 3.01,
+      "label": "baseline",
+      "status": "passed",
+      "summary": {
+        "keys": [
+          "architecture-name",
+          "bad-blocks",
+          "board-name",
+          "build-time",
+          "cpu",
+          "cpu-count",
+          "cpu-frequency",
+          "cpu-load",
+          "factory-software",
+          "free-hdd-space",
+          "free-memory",
+          "platform",
+          "total-hdd-space",
+          "total-memory",
+          "uptime",
+          "version",
+          "write-sect-since-reboot",
+          "write-sect-total"
+        ],
+        "kind": "dict"
+      }
+    },
+    {
+      "command": "system_resource_get",
+      "duration_ms": 2.82,
+      "label": "repeat 1",
+      "status": "passed",
+      "summary": {
+        "keys": [
+          "architecture-name",
+          "bad-blocks",
+          "board-name",
+          "build-time",
+          "cpu",
+          "cpu-count",
+          "cpu-frequency",
+          "cpu-load",
+          "factory-software",
+          "free-hdd-space",
+          "free-memory",
+          "platform",
+          "total-hdd-space",
+          "total-memory",
+          "uptime",
+          "version",
+          "write-sect-since-reboot",
+          "write-sect-total"
+        ],
+        "kind": "dict"
+      }
+    },
+    {
+      "command": "system_resource_get",
+      "duration_ms": 2.88,
+      "label": "repeat 2",
+      "status": "passed",
+      "summary": {
+        "keys": [
+          "architecture-name",
+          "bad-blocks",
+          "board-name",
+          "build-time",
+          "cpu",
+          "cpu-count",
+          "cpu-frequency",
+          "cpu-load",
+          "factory-software",
+          "free-hdd-space",
+          "free-memory",
+          "platform",
+          "total-hdd-space",
+          "total-memory",
+          "uptime",
+          "version",
+          "write-sect-since-reboot",
+          "write-sect-total"
+        ],
+        "kind": "dict"
+      }
+    },
+    {
+      "command": "system_identity_get",
+      "duration_ms": 1.13,
+      "label": "baseline",
+      "status": "passed",
+      "summary": {
+        "keys": [
+          "name"
+        ],
+        "kind": "dict"
+      }
+    },
+    {
+      "command": "system_identity_get",
+      "duration_ms": 1.03,
+      "label": "repeat 1",
+      "status": "passed",
+      "summary": {
+        "keys": [
+          "name"
+        ],
+        "kind": "dict"
+      }
+    },
+    {
+      "command": "system_identity_get",
+      "duration_ms": 0.97,
+      "label": "repeat 2",
+      "status": "passed",
+      "summary": {
+        "keys": [
+          "name"
+        ],
+        "kind": "dict"
+      }
+    },
+    {
+      "command": "system_clock_get",
+      "duration_ms": 1.04,
+      "label": "baseline",
+      "status": "passed",
+      "summary": {
+        "keys": [
+          "date",
+          "dst-active",
+          "gmt-offset",
+          "time",
+          "time-zone-autodetect",
+          "time-zone-name"
+        ],
+        "kind": "dict"
+      }
+    },
+    {
+      "command": "system_clock_get",
+      "duration_ms": 1.05,
+      "label": "repeat 1",
+      "status": "passed",
+      "summary": {
+        "keys": [
+          "date",
+          "dst-active",
+          "gmt-offset",
+          "time",
+          "time-zone-autodetect",
+          "time-zone-name"
+        ],
+        "kind": "dict"
+      }
+    },
+    {
+      "command": "system_clock_get",
+      "duration_ms": 0.96,
+      "label": "repeat 2",
+      "status": "passed",
+      "summary": {
+        "keys": [
+          "date",
+          "dst-active",
+          "gmt-offset",
+          "time",
+          "time-zone-autodetect",
+          "time-zone-name"
+        ],
+        "kind": "dict"
+      }
+    },
+    {
+      "command": "interface_list",
+      "duration_ms": 15.26,
+      "label": "running only",
+      "status": "passed",
+      "summary": {
+        "count": 9,
+        "kind": "list",
+        "sample_keys": [
+          ".id",
+          "actual-mtu",
+          "default-name",
+          "disabled",
+          "fp-rps-drop",
+          "fp-rx-byte",
+          "fp-rx-packet",
+          "fp-tx-byte",
+          "fp-tx-packet",
+          "l2mtu",
+          "last-link-down-time",
+          "last-link-up-time",
+          "link-downs",
+          "mac-address",
+          "max-l2mtu",
+          "mtu",
+          "name",
+          "running",
+          "rx-byte",
+          "rx-packet",
+          "tx-byte",
+          "tx-packet",
+          "tx-queue-drop",
+          "type",
+          "vrf"
+        ]
+      }
+    },
+    {
+      "command": "interface_list",
+      "duration_ms": 10.29,
+      "label": "disabled only",
+      "status": "passed",
+      "summary": {
+        "count": 1,
+        "kind": "list",
+        "sample_keys": [
+          ".id",
+          "disabled",
+          "fp-rps-drop",
+          "fp-rx-byte",
+          "fp-rx-packet",
+          "fp-tx-byte",
+          "fp-tx-packet",
+          "l2mtu",
+          "link-downs",
+          "mac-address",
+          "max-l2mtu",
+          "name",
+          "running",
+          "rx-byte",
+          "rx-drop",
+          "rx-error",
+          "rx-packet",
+          "tx-byte",
+          "tx-drop",
+          "tx-error",
+          "tx-packet",
+          "tx-queue-drop",
+          "type",
+          "vrf"
+        ]
+      }
+    },
+    {
+      "command": "interface_list",
+      "duration_ms": 15.81,
+      "label": "enabled only",
+      "status": "passed",
+      "summary": {
+        "count": 11,
+        "kind": "list",
+        "sample_keys": [
+          ".id",
+          "actual-mtu",
+          "default-name",
+          "disabled",
+          "fp-rps-drop",
+          "fp-rx-byte",
+          "fp-rx-packet",
+          "fp-tx-byte",
+          "fp-tx-packet",
+          "l2mtu",
+          "last-link-down-time",
+          "last-link-up-time",
+          "link-downs",
+          "mac-address",
+          "max-l2mtu",
+          "mtu",
+          "name",
+          "running",
+          "rx-byte",
+          "rx-packet",
+          "tx-byte",
+          "tx-packet",
+          "tx-queue-drop",
+          "type",
+          "vrf"
+        ]
+      }
+    },
+    {
+      "command": "interface_get",
+      "duration_ms": 11.34,
+      "label": "by name",
+      "status": "passed",
+      "summary": {
+        "keys": [
+          ".id",
+          "actual-mtu",
+          "default-name",
+          "disabled",
+          "fp-rps-drop",
+          "fp-rx-byte",
+          "fp-rx-packet",
+          "fp-tx-byte",
+          "fp-tx-packet",
+          "l2mtu",
+          "last-link-down-time",
+          "last-link-up-time",
+          "link-downs",
+          "mac-address",
+          "max-l2mtu",
+          "mtu",
+          "name",
+          "running",
+          "rx-byte",
+          "rx-packet",
+          "tx-byte",
+          "tx-packet",
+          "tx-queue-drop",
+          "type",
+          "vrf"
+        ],
+        "kind": "dict"
+      }
+    },
+    {
+      "command": "interface_get",
+      "duration_ms": 10.91,
+      "label": "by item id",
+      "status": "passed",
+      "summary": {
+        "keys": [
+          ".id",
+          "actual-mtu",
+          "default-name",
+          "disabled",
+          "fp-rps-drop",
+          "fp-rx-byte",
+          "fp-rx-packet",
+          "fp-tx-byte",
+          "fp-tx-packet",
+          "l2mtu",
+          "last-link-down-time",
+          "last-link-up-time",
+          "link-downs",
+          "mac-address",
+          "max-l2mtu",
+          "mtu",
+          "name",
+          "running",
+          "rx-byte",
+          "rx-packet",
+          "tx-byte",
+          "tx-packet",
+          "tx-queue-drop",
+          "type",
+          "vrf"
+        ],
+        "kind": "dict"
+      }
+    },
+    {
+      "command": "interface_get",
+      "duration_ms": 10.78,
+      "label": "secondary name",
+      "status": "passed",
+      "summary": {
+        "keys": [
+          ".id",
+          "actual-mtu",
+          "default-name",
+          "disabled",
+          "fp-rps-drop",
+          "fp-rx-byte",
+          "fp-rx-packet",
+          "fp-tx-byte",
+          "fp-tx-packet",
+          "l2mtu",
+          "last-link-down-time",
+          "last-link-up-time",
+          "link-downs",
+          "mac-address",
+          "max-l2mtu",
+          "mtu",
+          "name",
+          "running",
+          "rx-byte",
+          "rx-packet",
+          "slave",
+          "tx-byte",
+          "tx-packet",
+          "tx-queue-drop",
+          "type",
+          "vrf"
+        ],
+        "kind": "dict"
+      }
+    },
+    {
+      "command": "ip_address_list",
+      "duration_ms": 1.88,
+      "label": "bridge",
+      "status": "passed",
+      "summary": {
+        "count": 1,
+        "kind": "list",
+        "sample_keys": [
+          ".id",
+          "actual-interface",
+          "address",
+          "comment",
+          "disabled",
+          "dynamic",
+          "interface",
+          "invalid",
+          "network",
+          "slave",
+          "vrf"
+        ]
+      }
+    },
+    {
+      "command": "ip_address_list",
+      "duration_ms": 1.49,
+      "label": "wireguard",
+      "status": "passed",
+      "summary": {
+        "count": 1,
+        "kind": "list",
+        "sample_keys": [
+          ".id",
+          "actual-interface",
+          "address",
+          "comment",
+          "disabled",
+          "dynamic",
+          "interface",
+          "invalid",
+          "network",
+          "slave",
+          "vrf"
+        ]
+      }
+    },
+    {
+      "command": "ip_address_list",
+      "duration_ms": 1.34,
+      "label": "missing interface",
+      "status": "passed",
+      "summary": {
+        "count": 0,
+        "kind": "list",
+        "sample_keys": []
+      }
+    },
+    {
+      "command": "ip_address_get",
+      "duration_ms": 1.34,
+      "label": "by address",
+      "status": "passed",
+      "summary": {
+        "keys": [
+          ".id",
+          "actual-interface",
+          "address",
+          "comment",
+          "disabled",
+          "dynamic",
+          "interface",
+          "invalid",
+          "network",
+          "slave",
+          "vrf"
+        ],
+        "kind": "dict"
+      }
+    },
+    {
+      "command": "ip_address_get",
+      "duration_ms": 1.31,
+      "label": "by item id",
+      "status": "passed",
+      "summary": {
+        "keys": [
+          ".id",
+          "actual-interface",
+          "address",
+          "comment",
+          "disabled",
+          "dynamic",
+          "interface",
+          "invalid",
+          "network",
+          "slave",
+          "vrf"
+        ],
+        "kind": "dict"
+      }
+    },
+    {
+      "command": "ip_address_get",
+      "duration_ms": 1.3,
+      "label": "secondary address",
+      "status": "passed",
+      "summary": {
+        "keys": [
+          ".id",
+          "actual-interface",
+          "address",
+          "comment",
+          "disabled",
+          "dynamic",
+          "interface",
+          "invalid",
+          "network",
+          "slave",
+          "vrf"
+        ],
+        "kind": "dict"
+      }
+    },
+    {
+      "command": "ip_route_list",
+      "duration_ms": 5.05,
+      "label": "default route",
+      "status": "passed",
+      "summary": {
+        "count": 1,
+        "kind": "list",
+        "sample_keys": [
+          ".id",
+          "active",
+          "dhcp",
+          "distance",
+          "dst-address",
+          "dynamic",
+          "gateway",
+          "immediate-gw",
+          "inactive",
+          "routing-table",
+          "scope",
+          "target-scope",
+          "vrf-interface"
+        ]
+      }
+    },
+    {
+      "command": "ip_route_list",
+      "duration_ms": 2.94,
+      "label": "secondary route",
+      "status": "passed",
+      "summary": {
+        "count": 1,
+        "kind": "list",
+        "sample_keys": [
+          ".id",
+          "active",
+          "connect",
+          "distance",
+          "dst-address",
+          "dynamic",
+          "gateway",
+          "immediate-gw",
+          "inactive",
+          "local-address",
+          "routing-table",
+          "scope",
+          "target-scope"
+        ]
+      }
+    },
+    {
+      "command": "ip_route_list",
+      "duration_ms": 3.65,
+      "label": "missing route",
+      "status": "passed",
+      "summary": {
+        "count": 0,
+        "kind": "list",
+        "sample_keys": []
+      }
+    },
+    {
+      "command": "ip_route_get",
+      "duration_ms": 4.93,
+      "label": "by destination",
+      "status": "passed",
+      "summary": {
+        "keys": [
+          ".id",
+          "active",
+          "dhcp",
+          "distance",
+          "dst-address",
+          "dynamic",
+          "gateway",
+          "immediate-gw",
+          "inactive",
+          "routing-table",
+          "scope",
+          "target-scope",
+          "vrf-interface"
+        ],
+        "kind": "dict"
+      }
+    },
+    {
+      "command": "ip_route_get",
+      "duration_ms": 5.14,
+      "label": "by item id",
+      "status": "passed",
+      "summary": {
+        "keys": [
+          ".id",
+          "active",
+          "dhcp",
+          "distance",
+          "dst-address",
+          "dynamic",
+          "gateway",
+          "immediate-gw",
+          "inactive",
+          "routing-table",
+          "scope",
+          "target-scope",
+          "vrf-interface"
+        ],
+        "kind": "dict"
+      }
+    },
+    {
+      "command": "ip_route_get",
+      "duration_ms": 4.76,
+      "label": "secondary destination",
+      "status": "passed",
+      "summary": {
+        "keys": [
+          ".id",
+          "active",
+          "connect",
+          "distance",
+          "dst-address",
+          "dynamic",
+          "gateway",
+          "immediate-gw",
+          "inactive",
+          "local-address",
+          "routing-table",
+          "scope",
+          "target-scope"
+        ],
+        "kind": "dict"
+      }
+    },
+    {
+      "command": "dhcp_lease_list",
+      "duration_ms": 8.39,
+      "label": "active only",
+      "status": "passed",
+      "summary": {
+        "count": 16,
+        "kind": "list",
+        "sample_keys": [
+          ".id",
+          "active-address",
+          "active-client-id",
+          "active-mac-address",
+          "active-server",
+          "address",
+          "address-lists",
+          "blocked",
+          "comment",
+          "dhcp-option",
+          "disabled",
+          "dynamic",
+          "expires-after",
+          "host-name",
+          "last-seen",
+          "mac-address",
+          "radius",
+          "server",
+          "status"
+        ]
+      }
+    },
+    {
+      "command": "dhcp_lease_list",
+      "duration_ms": 3.54,
+      "label": "missing address",
+      "status": "passed",
+      "summary": {
+        "count": 0,
+        "kind": "list",
+        "sample_keys": []
+      }
+    },
+    {
+      "command": "dhcp_lease_list",
+      "duration_ms": 3.18,
+      "label": "missing mac",
+      "status": "passed",
+      "summary": {
+        "count": 0,
+        "kind": "list",
+        "sample_keys": []
+      }
+    },
+    {
+      "command": "dhcp_server_list",
+      "duration_ms": 4.16,
+      "label": "baseline",
+      "status": "passed",
+      "summary": {
+        "count": 1,
+        "kind": "list",
+        "sample_keys": [
+          ".id",
+          "address-lists",
+          "address-pool",
+          "disabled",
+          "dynamic",
+          "dynamic-lease-identifiers",
+          "interface",
+          "invalid",
+          "lease-script",
+          "lease-time",
+          "name",
+          "support-broadband-tr101",
+          "use-radius",
+          "use-reconfigure"
+        ]
+      }
+    },
+    {
+      "command": "dhcp_server_list",
+      "duration_ms": 1.51,
+      "label": "repeat 1",
+      "status": "passed",
+      "summary": {
+        "count": 1,
+        "kind": "list",
+        "sample_keys": [
+          ".id",
+          "address-lists",
+          "address-pool",
+          "disabled",
+          "dynamic",
+          "dynamic-lease-identifiers",
+          "interface",
+          "invalid",
+          "lease-script",
+          "lease-time",
+          "name",
+          "support-broadband-tr101",
+          "use-radius",
+          "use-reconfigure"
+        ]
+      }
+    },
+    {
+      "command": "dhcp_server_list",
+      "duration_ms": 1.42,
+      "label": "repeat 2",
+      "status": "passed",
+      "summary": {
+        "count": 1,
+        "kind": "list",
+        "sample_keys": [
+          ".id",
+          "address-lists",
+          "address-pool",
+          "disabled",
+          "dynamic",
+          "dynamic-lease-identifiers",
+          "interface",
+          "invalid",
+          "lease-script",
+          "lease-time",
+          "name",
+          "support-broadband-tr101",
+          "use-radius",
+          "use-reconfigure"
+        ]
+      }
+    },
+    {
+      "command": "dhcp_network_list",
+      "duration_ms": 1.25,
+      "label": "baseline",
+      "status": "passed",
+      "summary": {
+        "count": 1,
+        "kind": "list",
+        "sample_keys": [
+          ".id",
+          "address",
+          "caps-manager",
+          "comment",
+          "dhcp-option",
+          "dns-server",
+          "dynamic",
+          "gateway",
+          "netmask",
+          "ntp-server",
+          "wins-server"
+        ]
+      }
+    },
+    {
+      "command": "dhcp_network_list",
+      "duration_ms": 1.21,
+      "label": "repeat 1",
+      "status": "passed",
+      "summary": {
+        "count": 1,
+        "kind": "list",
+        "sample_keys": [
+          ".id",
+          "address",
+          "caps-manager",
+          "comment",
+          "dhcp-option",
+          "dns-server",
+          "dynamic",
+          "gateway",
+          "netmask",
+          "ntp-server",
+          "wins-server"
+        ]
+      }
+    },
+    {
+      "command": "dhcp_network_list",
+      "duration_ms": 1.19,
+      "label": "repeat 2",
+      "status": "passed",
+      "summary": {
+        "count": 1,
+        "kind": "list",
+        "sample_keys": [
+          ".id",
+          "address",
+          "caps-manager",
+          "comment",
+          "dhcp-option",
+          "dns-server",
+          "dynamic",
+          "gateway",
+          "netmask",
+          "ntp-server",
+          "wins-server"
+        ]
+      }
+    },
+    {
+      "command": "dns_get",
+      "duration_ms": 1.8,
+      "label": "baseline",
+      "status": "passed",
+      "summary": {
+        "keys": [
+          "address-list-extra-time",
+          "allow-remote-requests",
+          "cache-max-ttl",
+          "cache-size",
+          "cache-used",
+          "doh-max-concurrent-queries",
+          "doh-max-server-connections",
+          "doh-timeout",
+          "dynamic-servers",
+          "max-concurrent-queries",
+          "max-concurrent-tcp-sessions",
+          "max-udp-packet-size",
+          "mdns-repeat-ifaces",
+          "query-server-timeout",
+          "query-total-timeout",
+          "servers",
+          "use-doh-server",
+          "verify-doh-cert",
+          "vrf"
+        ],
+        "kind": "dict"
+      }
+    },
+    {
+      "command": "dns_get",
+      "duration_ms": 1.59,
+      "label": "repeat 1",
+      "status": "passed",
+      "summary": {
+        "keys": [
+          "address-list-extra-time",
+          "allow-remote-requests",
+          "cache-max-ttl",
+          "cache-size",
+          "cache-used",
+          "doh-max-concurrent-queries",
+          "doh-max-server-connections",
+          "doh-timeout",
+          "dynamic-servers",
+          "max-concurrent-queries",
+          "max-concurrent-tcp-sessions",
+          "max-udp-packet-size",
+          "mdns-repeat-ifaces",
+          "query-server-timeout",
+          "query-total-timeout",
+          "servers",
+          "use-doh-server",
+          "verify-doh-cert",
+          "vrf"
+        ],
+        "kind": "dict"
+      }
+    },
+    {
+      "command": "dns_get",
+      "duration_ms": 1.48,
+      "label": "repeat 2",
+      "status": "passed",
+      "summary": {
+        "keys": [
+          "address-list-extra-time",
+          "allow-remote-requests",
+          "cache-max-ttl",
+          "cache-size",
+          "cache-used",
+          "doh-max-concurrent-queries",
+          "doh-max-server-connections",
+          "doh-timeout",
+          "dynamic-servers",
+          "max-concurrent-queries",
+          "max-concurrent-tcp-sessions",
+          "max-udp-packet-size",
+          "mdns-repeat-ifaces",
+          "query-server-timeout",
+          "query-total-timeout",
+          "servers",
+          "use-doh-server",
+          "verify-doh-cert",
+          "vrf"
+        ],
+        "kind": "dict"
+      }
+    },
+    {
+      "command": "bridge_list",
+      "duration_ms": 2.87,
+      "label": "by name",
+      "status": "passed",
+      "summary": {
+        "count": 1,
+        "kind": "list",
+        "sample_keys": [
+          ".id",
+          "actual-mtu",
+          "admin-mac",
+          "ageing-time",
+          "arp",
+          "arp-timeout",
+          "auto-mac",
+          "comment",
+          "dhcp-snooping",
+          "disabled",
+          "dynamic",
+          "fast-forward",
+          "forward-delay",
+          "igmp-snooping",
+          "l2mtu",
+          "mac-address",
+          "managed",
+          "max-learned-entries",
+          "max-message-age",
+          "mlag-heartbeat",
+          "mlag-peer-port",
+          "mlag-priority",
+          "mtu",
+          "name",
+          "port-cost-mode",
+          "priority",
+          "protocol-mode",
+          "ra-guard",
+          "running",
+          "transmit-hold-count",
+          "vlan-filtering"
+        ]
+      }
+    },
+    {
+      "command": "bridge_list",
+      "duration_ms": 1.33,
+      "label": "missing bridge",
+      "status": "passed",
+      "summary": {
+        "count": 0,
+        "kind": "list",
+        "sample_keys": []
+      }
+    },
+    {
+      "command": "bridge_list",
+      "duration_ms": 1.89,
+      "label": "all enabled",
+      "status": "passed",
+      "summary": {
+        "count": 1,
+        "kind": "list",
+        "sample_keys": [
+          ".id",
+          "actual-mtu",
+          "admin-mac",
+          "ageing-time",
+          "arp",
+          "arp-timeout",
+          "auto-mac",
+          "comment",
+          "dhcp-snooping",
+          "disabled",
+          "dynamic",
+          "fast-forward",
+          "forward-delay",
+          "igmp-snooping",
+          "l2mtu",
+          "mac-address",
+          "managed",
+          "max-learned-entries",
+          "max-message-age",
+          "mlag-heartbeat",
+          "mlag-peer-port",
+          "mlag-priority",
+          "mtu",
+          "name",
+          "port-cost-mode",
+          "priority",
+          "protocol-mode",
+          "ra-guard",
+          "running",
+          "transmit-hold-count",
+          "vlan-filtering"
+        ]
+      }
+    },
+    {
+      "command": "bridge_port_list",
+      "duration_ms": 3.71,
+      "label": "bridge and interface",
+      "status": "passed",
+      "summary": {
+        "count": 1,
+        "kind": "list",
+        "sample_keys": [
+          ".id",
+          ".nextid",
+          "auto-isolate",
+          "bpdu-guard",
+          "bridge",
+          "broadcast-flood",
+          "comment",
+          "disabled",
+          "dynamic",
+          "edge",
+          "fast-leave",
+          "frame-types",
+          "horizon",
+          "hw",
+          "hw-offload",
+          "inactive",
+          "ingress-filtering",
+          "interface",
+          "learn",
+          "managed",
+          "multicast-router",
+          "mvrp-applicant-state",
+          "mvrp-registrar-state",
+          "point-to-point",
+          "priority",
+          "pvid",
+          "restricted-role",
+          "restricted-tcn",
+          "status",
+          "tag-stacking",
+          "trusted",
+          "trusted-ra",
+          "unknown-multicast-flood",
+          "unknown-unicast-flood"
+        ]
+      }
+    },
+    {
+      "command": "bridge_port_list",
+      "duration_ms": 9.52,
+      "label": "bridge only",
+      "status": "passed",
+      "summary": {
+        "count": 8,
+        "kind": "list",
+        "sample_keys": [
+          ".id",
+          ".nextid",
+          "auto-isolate",
+          "bpdu-guard",
+          "bridge",
+          "broadcast-flood",
+          "comment",
+          "disabled",
+          "dynamic",
+          "edge",
+          "fast-leave",
+          "frame-types",
+          "horizon",
+          "hw",
+          "hw-offload",
+          "inactive",
+          "ingress-filtering",
+          "interface",
+          "learn",
+          "managed",
+          "multicast-router",
+          "mvrp-applicant-state",
+          "mvrp-registrar-state",
+          "point-to-point",
+          "priority",
+          "pvid",
+          "restricted-role",
+          "restricted-tcn",
+          "status",
+          "tag-stacking",
+          "trusted",
+          "trusted-ra",
+          "unknown-multicast-flood",
+          "unknown-unicast-flood"
+        ]
+      }
+    },
+    {
+      "command": "bridge_port_list",
+      "duration_ms": 3.23,
+      "label": "missing interface",
+      "status": "passed",
+      "summary": {
+        "count": 0,
+        "kind": "list",
+        "sample_keys": []
+      }
+    },
+    {
+      "command": "bridge_vlan_list",
+      "duration_ms": 1.13,
+      "label": "bridge",
+      "status": "passed",
+      "summary": {
+        "count": 0,
+        "kind": "list",
+        "sample_keys": []
+      }
+    },
+    {
+      "command": "bridge_vlan_list",
+      "duration_ms": 1.02,
+      "label": "vlan 1",
+      "status": "passed",
+      "summary": {
+        "count": 0,
+        "kind": "list",
+        "sample_keys": []
+      }
+    },
+    {
+      "command": "bridge_vlan_list",
+      "duration_ms": 1.02,
+      "label": "vlan 4094",
+      "status": "passed",
+      "summary": {
+        "count": 0,
+        "kind": "list",
+        "sample_keys": []
+      }
+    },
+    {
+      "command": "vlan_list",
+      "duration_ms": 0.93,
+      "label": "all enabled",
+      "status": "passed",
+      "summary": {
+        "count": 0,
+        "kind": "list",
+        "sample_keys": []
+      }
+    },
+    {
+      "command": "vlan_list",
+      "duration_ms": 0.9,
+      "label": "by name",
+      "status": "passed",
+      "summary": {
+        "count": 0,
+        "kind": "list",
+        "sample_keys": []
+      }
+    },
+    {
+      "command": "vlan_list",
+      "duration_ms": 0.84,
+      "label": "by parent bridge",
+      "status": "passed",
+      "summary": {
+        "count": 0,
+        "kind": "list",
+        "sample_keys": []
+      }
+    },
+    {
+      "command": "firewall_filter_list",
+      "duration_ms": 3.83,
+      "label": "input accept",
+      "status": "passed",
+      "summary": {
+        "count": 2,
+        "kind": "list",
+        "sample_keys": [
+          ".id",
+          "action",
+          "bytes",
+          "chain",
+          "comment",
+          "disabled",
+          "dst-port",
+          "dynamic",
+          "invalid",
+          "packets",
+          "protocol"
+        ]
+      }
+    },
+    {
+      "command": "firewall_filter_list",
+      "duration_ms": 3.59,
+      "label": "forward drop",
+      "status": "passed",
+      "summary": {
+        "count": 1,
+        "kind": "list",
+        "sample_keys": [
+          ".id",
+          "action",
+          "bytes",
+          "chain",
+          "comment",
+          "disabled",
+          "dynamic",
+          "invalid",
+          "out-interface-list",
+          "packets",
+          "src-address-list"
+        ]
+      }
+    },
+    {
+      "command": "firewall_filter_list",
+      "duration_ms": 3.05,
+      "label": "output any",
+      "status": "passed",
+      "summary": {
+        "count": 0,
+        "kind": "list",
+        "sample_keys": []
+      }
+    },
+    {
+      "command": "firewall_nat_list",
+      "duration_ms": 2.21,
+      "label": "srcnat masquerade",
+      "status": "passed",
+      "summary": {
+        "count": 2,
+        "kind": "list",
+        "sample_keys": [
+          ".id",
+          "action",
+          "bytes",
+          "chain",
+          "comment",
+          "disabled",
+          "dynamic",
+          "in-interface",
+          "invalid",
+          "packets"
+        ]
+      }
+    },
+    {
+      "command": "firewall_nat_list",
+      "duration_ms": 2.55,
+      "label": "dstnat",
+      "status": "passed",
+      "summary": {
+        "count": 1,
+        "kind": "list",
+        "sample_keys": [
+          ".id",
+          "action",
+          "bytes",
+          "chain",
+          "comment",
+          "disabled",
+          "dst-address-list",
+          "dst-port",
+          "dynamic",
+          "in-interface-list",
+          "invalid",
+          "log",
+          "log-prefix",
+          "packets",
+          "protocol",
+          "src-address-list",
+          "to-addresses",
+          "to-ports"
+        ]
+      }
+    },
+    {
+      "command": "firewall_nat_list",
+      "duration_ms": 2.4,
+      "label": "disabled srcnat",
+      "status": "passed",
+      "summary": {
+        "count": 1,
+        "kind": "list",
+        "sample_keys": [
+          ".id",
+          "action",
+          "bytes",
+          "chain",
+          "comment",
+          "disabled",
+          "dst-address",
+          "dynamic",
+          "invalid",
+          "log",
+          "log-prefix",
+          "packets",
+          "src-address",
+          "time"
+        ]
+      }
+    },
+    {
+      "command": "firewall_address_list_list",
+      "duration_ms": 14.64,
+      "label": "discovered list",
+      "status": "passed",
+      "summary": {
+        "count": 2,
+        "kind": "list",
+        "sample_keys": [
+          ".id",
+          "address",
+          "creation-time",
+          "disabled",
+          "dynamic",
+          "list"
+        ]
+      }
+    },
+    {
+      "command": "firewall_address_list_list",
+      "duration_ms": 20.09,
+      "label": "discovered entry",
+      "status": "passed",
+      "summary": {
+        "count": 1,
+        "kind": "list",
+        "sample_keys": [
+          ".id",
+          "address",
+          "creation-time",
+          "disabled",
+          "dynamic",
+          "list"
+        ]
+      }
+    },
+    {
+      "command": "firewall_address_list_list",
+      "duration_ms": 14.04,
+      "label": "missing list",
+      "status": "passed",
+      "summary": {
+        "count": 0,
+        "kind": "list",
+        "sample_keys": []
+      }
+    },
+    {
+      "command": "ppp_active_list",
+      "duration_ms": 10.25,
+      "label": "all",
+      "status": "passed",
+      "summary": {
+        "count": 0,
+        "kind": "list",
+        "sample_keys": []
+      }
+    },
+    {
+      "command": "ppp_active_list",
+      "duration_ms": 1.47,
+      "label": "pppoe only",
+      "status": "passed",
+      "summary": {
+        "count": 0,
+        "kind": "list",
+        "sample_keys": []
+      }
+    },
+    {
+      "command": "ppp_active_list",
+      "duration_ms": 1.2,
+      "label": "by name",
+      "status": "passed",
+      "summary": {
+        "count": 0,
+        "kind": "list",
+        "sample_keys": []
+      }
+    },
+    {
+      "command": "ppp_secret_list",
+      "duration_ms": 2.08,
+      "label": "by name",
+      "status": "passed",
+      "summary": {
+        "count": 1,
+        "kind": "list",
+        "sample_keys": [
+          ".id",
+          "caller-id",
+          "disabled",
+          "ipv6-routes",
+          "last-logged-out",
+          "limit-bytes-in",
+          "limit-bytes-out",
+          "name",
+          "profile",
+          "routes",
+          "service"
+        ]
+      }
+    },
+    {
+      "command": "ppp_secret_list",
+      "duration_ms": 2.22,
+      "label": "service any",
+      "status": "passed",
+      "summary": {
+        "count": 1,
+        "kind": "list",
+        "sample_keys": [
+          ".id",
+          "caller-id",
+          "disabled",
+          "ipv6-routes",
+          "last-logged-out",
+          "limit-bytes-in",
+          "limit-bytes-out",
+          "name",
+          "profile",
+          "routes",
+          "service"
+        ]
+      }
+    },
+    {
+      "command": "ppp_secret_list",
+      "duration_ms": 1.51,
+      "label": "missing secret",
+      "status": "passed",
+      "summary": {
+        "count": 0,
+        "kind": "list",
+        "sample_keys": []
+      }
+    },
+    {
+      "command": "wireguard_interface_list",
+      "duration_ms": 1.56,
+      "label": "by name",
+      "status": "passed",
+      "summary": {
+        "count": 1,
+        "kind": "list",
+        "sample_keys": [
+          ".id",
+          "comment",
+          "disabled",
+          "listen-port",
+          "mtu",
+          "name",
+          "public-key",
+          "running"
+        ]
+      }
+    },
+    {
+      "command": "wireguard_interface_list",
+      "duration_ms": 1.55,
+      "label": "all enabled",
+      "status": "passed",
+      "summary": {
+        "count": 1,
+        "kind": "list",
+        "sample_keys": [
+          ".id",
+          "comment",
+          "disabled",
+          "listen-port",
+          "mtu",
+          "name",
+          "public-key",
+          "running"
+        ]
+      }
+    },
+    {
+      "command": "wireguard_interface_list",
+      "duration_ms": 1.29,
+      "label": "missing interface",
+      "status": "passed",
+      "summary": {
+        "count": 0,
+        "kind": "list",
+        "sample_keys": []
+      }
+    },
+    {
+      "command": "wireguard_peer_list",
+      "duration_ms": 18.61,
+      "label": "all peers",
+      "status": "passed",
+      "summary": {
+        "count": 2,
+        "kind": "list",
+        "sample_keys": [
+          ".id",
+          "allowed-address",
+          "client-address",
+          "client-allowed-address",
+          "client-dns",
+          "client-endpoint",
+          "client-keepalive",
+          "comment",
+          "current-endpoint-address",
+          "current-endpoint-port",
+          "disabled",
+          "dynamic",
+          "endpoint-address",
+          "endpoint-port",
+          "interface",
+          "name",
+          "persistent-keepalive",
+          "public-key",
+          "responder",
+          "rx",
+          "tx"
+        ]
+      }
+    },
+    {
+      "command": "wireguard_peer_list",
+      "duration_ms": 14.84,
+      "label": "disabled peers",
+      "status": "passed",
+      "summary": {
+        "count": 0,
+        "kind": "list",
+        "sample_keys": []
+      }
+    },
+    {
+      "command": "wireguard_peer_list",
+      "duration_ms": 13.98,
+      "label": "missing interface",
+      "status": "passed",
+      "summary": {
+        "count": 0,
+        "kind": "list",
+        "sample_keys": []
+      }
+    },
+    {
+      "command": "file_list",
+      "duration_ms": 38.63,
+      "label": "directory by name",
+      "status": "passed",
+      "summary": {
+        "count": 1,
+        "kind": "list",
+        "sample_keys": [
+          ".id",
+          "last-modified",
+          "name",
+          "type"
+        ]
+      }
+    },
+    {
+      "command": "file_list",
+      "duration_ms": 37.83,
+      "label": "backup scripts",
+      "status": "passed",
+      "summary": {
+        "count": 9,
+        "kind": "list",
+        "sample_keys": [
+          ".id",
+          "last-modified",
+          "name",
+          "size",
+          "type"
+        ]
+      }
+    },
+    {
+      "command": "file_list",
+      "duration_ms": 37.42,
+      "label": "missing directory",
+      "status": "passed",
+      "summary": {
+        "count": 0,
+        "kind": "list",
+        "sample_keys": []
+      }
+    }
+  ],
+  "commands": [
+    {
+      "command": "bridge_list",
+      "failed": 0,
+      "passed": 3,
+      "status": "passed"
+    },
+    {
+      "command": "bridge_port_list",
+      "failed": 0,
+      "passed": 3,
+      "status": "passed"
+    },
+    {
+      "command": "bridge_vlan_list",
+      "failed": 0,
+      "passed": 3,
+      "status": "passed"
+    },
+    {
+      "command": "dhcp_lease_list",
+      "failed": 0,
+      "passed": 3,
+      "status": "passed"
+    },
+    {
+      "command": "dhcp_network_list",
+      "failed": 0,
+      "passed": 3,
+      "status": "passed"
+    },
+    {
+      "command": "dhcp_server_list",
+      "failed": 0,
+      "passed": 3,
+      "status": "passed"
+    },
+    {
+      "command": "dns_get",
+      "failed": 0,
+      "passed": 3,
+      "status": "passed"
+    },
+    {
+      "command": "dns_resolve",
+      "failed": 0,
+      "passed": 3,
+      "status": "passed"
+    },
+    {
+      "command": "file_list",
+      "failed": 0,
+      "passed": 3,
+      "status": "passed"
+    },
+    {
+      "command": "firewall_address_list_list",
+      "failed": 0,
+      "passed": 3,
+      "status": "passed"
+    },
+    {
+      "command": "firewall_filter_list",
+      "failed": 0,
+      "passed": 3,
+      "status": "passed"
+    },
+    {
+      "command": "firewall_nat_list",
+      "failed": 0,
+      "passed": 3,
+      "status": "passed"
+    },
+    {
+      "command": "interface_get",
+      "failed": 0,
+      "passed": 3,
+      "status": "passed"
+    },
+    {
+      "command": "interface_list",
+      "failed": 0,
+      "passed": 3,
+      "status": "passed"
+    },
+    {
+      "command": "interface_monitor",
+      "failed": 0,
+      "passed": 3,
+      "status": "passed"
+    },
+    {
+      "command": "ip_address_get",
+      "failed": 0,
+      "passed": 3,
+      "status": "passed"
+    },
+    {
+      "command": "ip_address_list",
+      "failed": 0,
+      "passed": 3,
+      "status": "passed"
+    },
+    {
+      "command": "ip_route_get",
+      "failed": 0,
+      "passed": 3,
+      "status": "passed"
+    },
+    {
+      "command": "ip_route_list",
+      "failed": 0,
+      "passed": 3,
+      "status": "passed"
+    },
+    {
+      "command": "ppp_active_list",
+      "failed": 0,
+      "passed": 3,
+      "status": "passed"
+    },
+    {
+      "command": "ppp_secret_list",
+      "failed": 0,
+      "passed": 3,
+      "status": "passed"
+    },
+    {
+      "command": "resource_listen",
+      "failed": 3,
+      "passed": 0,
+      "status": "failed"
+    },
+    {
+      "command": "resource_print",
+      "failed": 0,
+      "passed": 3,
+      "status": "passed"
+    },
+    {
+      "command": "system_clock_get",
+      "failed": 0,
+      "passed": 3,
+      "status": "passed"
+    },
+    {
+      "command": "system_identity_get",
+      "failed": 0,
+      "passed": 3,
+      "status": "passed"
+    },
+    {
+      "command": "system_resource_get",
+      "failed": 0,
+      "passed": 3,
+      "status": "passed"
+    },
+    {
+      "command": "tool_ping",
+      "failed": 0,
+      "passed": 3,
+      "status": "passed"
+    },
+    {
+      "command": "tool_traceroute",
+      "failed": 0,
+      "passed": 3,
+      "status": "passed"
+    },
+    {
+      "command": "vlan_list",
+      "failed": 0,
+      "passed": 3,
+      "status": "passed"
+    },
+    {
+      "command": "wireguard_interface_list",
+      "failed": 0,
+      "passed": 3,
+      "status": "passed"
+    },
+    {
+      "command": "wireguard_peer_list",
+      "failed": 0,
+      "passed": 3,
+      "status": "passed"
+    }
+  ],
+  "completed_at": "2026-04-06T06:09:04.538785+00:00",
+  "host": "192.168.16.1",
+  "started_at": "2026-04-06T06:08:28.703260+00:00",
+  "summary": {
+    "cases_failed": 3,
+    "cases_passed": 90,
+    "cases_total": 93,
+    "commands_failed": 1,
+    "commands_passed": 30,
+    "commands_total": 31
+  },
+  "timeout_seconds": 10.0
+}

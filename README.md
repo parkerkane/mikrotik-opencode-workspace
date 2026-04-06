@@ -79,6 +79,14 @@ Testing notes:
 - `pytest` runs with `--disable-socket`, so default tests must stay fully mocked.
 - Client transport tests use `FakeSocket` in `tools/mikrotik-mcp/tests/conftest.py`.
 
+Live smoke test for read-only commands:
+
+```bash
+python tools/mikrotik-mcp/scripts/live_smoke_read_only.py <router-host>
+```
+
+Reports are written to `tools/mikrotik-mcp/reports/live-smoke/` as both JSON and Markdown.
+
 ## Tool Surface
 
 Current phases expose these MCP tools:
