@@ -25,6 +25,12 @@
 - Optional transport env vars already wired: `MIKROTIK_API_SSL`, `MIKROTIK_API_PORT`, `MIKROTIK_TLS_VERIFY`.
 - TLS defaults to enabled; default port is `8729` when SSL is on, else `8728`.
 
+## Response Formatting
+- Default to human-friendly Markdown when presenting router data.
+- Use Markdown tables for tabular RouterOS results like users, interfaces, addresses, and routes.
+- Use short summaries for single-record outputs like `/system/resource` unless the user asks for more detail.
+- Only show raw JSON or raw tool output when the user explicitly requests raw data.
+
 ## Testing Conventions
 - `pytest` is configured with `--disable-socket` in `packages/mcp-server/pyproject.toml`; default tests must stay fully mocked.
 - Existing tests use `FakeSocket` in `packages/mcp-server/tests/conftest.py` for client transport tests and `Mock()` for tool-layer tests.
