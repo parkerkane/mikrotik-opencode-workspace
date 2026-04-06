@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
+
+exec "$SCRIPT_DIR/scripts/run-opencode-shared.sh" "$@"

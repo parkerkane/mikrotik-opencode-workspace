@@ -1,0 +1,15 @@
+.git
+.pytest_cache
+__pycache__
+*.py[cod]
+*.egg-info
+.coverage
+.mypy_cache
+.venv
+venv
+dist
+build
+backups
+exports
+certs
+!certs/README.md

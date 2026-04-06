@@ -1,7 +1,7 @@
 # Project Structure
 
 ```
-manager-oc/
+mikrotik-manager/
 │
 ├── .env                          # Credentials (git-ignored)
 ├── .env.example                  # Template — safe to commit

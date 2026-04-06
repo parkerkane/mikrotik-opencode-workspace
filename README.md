@@ -89,6 +89,49 @@ python tools/mikrotik/main.py <router-host>
 
 The host argument is required.
 
+## Run OpenCode In Docker
+
+These wrappers run OpenCode inside a hardened container while keeping the workspace mounted at `/workspace` so project `opencode.json` and the local MCP server still work.
+
+Builds are automatic on each run:
+
+```bash
+scripts/run-opencode-shared.sh
+scripts/run-opencode-isolated.sh
+```
+
+Shared credentials mode:
+- Reuses host OpenCode config from `~/.config/opencode`
+- Reuses host provider auth from `~/.local/share/opencode/auth.json`
+- Keeps container cache, logs, snapshots, and other runtime state in Docker named volumes
+
+Fully isolated mode:
+- Does not reuse any host OpenCode config or auth
+- Stores config, auth, logs, snapshots, and cache in Docker named volumes only
+
+Both wrappers:
+- mount this repo at `/workspace`
+- start from `/workspace` so project `opencode.json` is discovered automatically
+- run with `--cap-drop=ALL`, `--security-opt no-new-privileges:true`, and a read-only container filesystem
+- disable Git credential prompting so authenticated `git push` stays a host-side action unless you explicitly add Git credentials to the container
+
+Pass a custom command instead of the default `opencode /workspace` if needed:
+
+```bash
+scripts/run-opencode-shared.sh opencode --version
+scripts/run-opencode-isolated.sh bash
+```
+
+Reset Docker volumes created by the wrappers:
+
+```bash
+scripts/reset-opencode-docker-volumes.sh
+```
+
+Note: `opencode.json` currently targets `router.local`. If that hostname does not resolve from inside Docker on your machine, replace it with the router IP or another resolvable DNS name.
+
+The Docker wrappers use the `mikrotik-manager-opencode` image name and `mikrotik-manager-opencode-*` Docker volume names by default.
+
 ## Testing
 
 ```bash
