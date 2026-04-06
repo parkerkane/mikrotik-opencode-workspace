@@ -169,6 +169,8 @@ Why last:
 
 ## Phase 7: Response Formatting Tightening
 
+Status: done.
+
 Deliverables:
 
 - explicit presentation templates for common operational outputs
@@ -176,12 +178,19 @@ Deliverables:
 - stable handling for empty values and boolean-like fields in user-facing responses
 - concise summary lines for list-style operational outputs
 
-What needs to be done:
+What was done:
 
-- define default display formats for singleton tools such as system identity, clock, resource, and DNS settings
-- define fixed default columns for list tools such as interfaces, addresses, routes, and DHCP leases
-- standardize default rendering for missing values and status fields
-- document when raw JSON should still be shown instead of the formatted view
+- add explicit Markdown presentation templates for common operational singleton outputs such as system identity, clock, resource, and DNS settings
+- define fixed default columns for list tools such as interfaces, addresses, routes, DHCP leases, DHCP servers, and DHCP networks
+- standardize user-facing rendering for missing values and boolean-like status fields
+- keep formatted text output paired with stable structured content, while preserving raw JSON output for generic tools such as `resource_print`
+
+Definition of done:
+
+- singleton operational tools return concise summary lines plus Markdown key/value tables
+- list-oriented operational tools return concise count summaries plus consistent Markdown tables
+- empty values and boolean-like fields render consistently in user-facing responses
+- mocked pytest coverage passes locally for the formatted output paths
 
 Why separate:
 
@@ -220,9 +229,7 @@ These apply in every phase:
 
 ## Recommended Immediate Next Steps
 
-1. Implement tagged command handling for long-running RouterOS operations.
-2. Add `resource_listen` and `command_cancel`.
-3. Define safe MCP UX for streamed monitor and diagnostics output.
-4. Add cancellation and interrupted-command tests.
-5. Tighten response formatting for common operational tools.
-6. Add dedicated wrappers for high-value commands such as ping and traceroute.
+1. Add dedicated wrappers for additional high-value commands such as traceroute and selected diagnostics.
+2. Define friendly tool names and constrained parameters for those command families.
+3. Normalize the most useful result fields for each operational command wrapper.
+4. Add mocked tests for success, timeout, and RouterOS error cases.

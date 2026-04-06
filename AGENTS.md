@@ -2,7 +2,7 @@
 
 ## Scope
 - The only active code package is `tools/mikrotik-mcp/`.
-- Current implementation scope is through Phase 5: generic read/mutation tools, core operational read tools, DNS set support, router file download, backup collection workflow, and bridge/VLAN/firewall/PPP/WireGuard tooling. Roadmap source: `docs/implementation-phases.md`.
+- Current implementation scope is through Phase 7: generic read/mutation tools, core operational read tools, DNS set support, router file download, backup collection workflow, bridge/VLAN/firewall/PPP/WireGuard tooling, long-running command support, and response formatting tightening. Roadmap source: `docs/implementation-phases.md`.
 
 ## Working Directory
 - Run Python install and test commands from the repo root.
@@ -41,4 +41,4 @@
 - Keep `jq_filter` behavior tool-side: `resource_print` applies it after RouterOS replies are normalized to JSON-like Python data.
 
 ## Near-Term Direction
-- If continuing feature work, Phase 7 is next: response formatting tightening.
+- If continuing feature work, Phase 8 is next: operational command wrappers.
