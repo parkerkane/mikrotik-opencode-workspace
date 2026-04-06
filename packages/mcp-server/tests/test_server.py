@@ -7,12 +7,33 @@ import pytest
 
 from mikrotik_mcp.downloads import RouterFileDownloadError
 from mikrotik_mcp.server import (
+    bridge_add_impl,
+    bridge_list_impl,
+    bridge_port_add_impl,
+    bridge_port_list_impl,
+    bridge_port_remove_impl,
+    bridge_remove_impl,
+    bridge_vlan_add_impl,
+    bridge_vlan_list_impl,
+    bridge_vlan_remove_impl,
     command_run_impl,
     dhcp_lease_list_impl,
     dhcp_network_list_impl,
     dhcp_server_list_impl,
     dns_get_impl,
     dns_set_impl,
+    firewall_address_list_add_impl,
+    firewall_address_list_list_impl,
+    firewall_address_list_remove_impl,
+    firewall_filter_add_impl,
+    firewall_filter_list_impl,
+    firewall_filter_remove_impl,
+    firewall_filter_set_impl,
+    firewall_nat_add_impl,
+    firewall_nat_list_impl,
+    firewall_nat_remove_impl,
+    firewall_nat_set_impl,
+    firewall_rule_move_impl,
     file_download_impl,
     file_list_impl,
     interface_get_impl,
@@ -21,6 +42,10 @@ from mikrotik_mcp.server import (
     ip_address_list_impl,
     ip_route_get_impl,
     ip_route_list_impl,
+    ppp_active_list_impl,
+    ppp_secret_add_impl,
+    ppp_secret_list_impl,
+    ppp_secret_remove_impl,
     resource_add_impl,
     resource_print_impl,
     resource_remove_impl,
@@ -31,6 +56,14 @@ from mikrotik_mcp.server import (
     system_export_impl,
     system_identity_get_impl,
     system_resource_get_impl,
+    vlan_add_impl,
+    vlan_list_impl,
+    vlan_remove_impl,
+    wireguard_interface_add_impl,
+    wireguard_interface_list_impl,
+    wireguard_peer_add_impl,
+    wireguard_peer_list_impl,
+    wireguard_peer_remove_impl,
 )
 
 
@@ -206,6 +239,531 @@ def test_interface_get_requires_exactly_one_locator() -> None:
 
     with pytest.raises(ValueError, match="Exactly one interface locator is required"):
         interface_get_impl(client, name="ether1", item_id="*1")
+
+
+def test_bridge_list_builds_expected_queries() -> None:
+    client = Mock()
+    client.print.return_value = [{"name": "bridge1", "disabled": "false"}]
+
+    result = bridge_list_impl(client, name="bridge1", disabled=False)
+
+    assert result == [{"name": "bridge1", "disabled": "false"}]
+    client.print.assert_called_once_with(
+        "/interface/bridge",
+        proplist=None,
+        queries=["name=bridge1", "disabled=false"],
+        attrs=None,
+    )
+
+
+def test_bridge_add_calls_client_with_attributes() -> None:
+    client = Mock()
+    client.add.return_value = {"ret": "*7"}
+
+    result = bridge_add_impl(client, attributes={"name": "bridge1", "vlan-filtering": True})
+
+    assert result == {"ret": "*7"}
+    client.add.assert_called_once_with("/interface/bridge", attrs={"name": "bridge1", "vlan-filtering": True})
+
+
+def test_bridge_add_requires_attributes() -> None:
+    client = Mock()
+
+    with pytest.raises(ValueError, match="attributes are required"):
+        bridge_add_impl(client)
+
+
+def test_bridge_remove_calls_client_with_item_id() -> None:
+    client = Mock()
+    client.remove.return_value = {"success": True}
+
+    result = bridge_remove_impl(client, item_id="*5")
+
+    assert result == {"success": True}
+    client.remove.assert_called_once_with("/interface/bridge", "*5")
+
+
+def test_bridge_port_list_builds_expected_queries() -> None:
+    client = Mock()
+    client.print.return_value = [{"bridge": "bridge1", "interface": "ether2"}]
+
+    result = bridge_port_list_impl(client, bridge="bridge1", interface="ether2", disabled=False)
+
+    assert result == [{"bridge": "bridge1", "interface": "ether2"}]
+    client.print.assert_called_once_with(
+        "/interface/bridge/port",
+        proplist=None,
+        queries=["bridge=bridge1", "interface=ether2", "disabled=false"],
+        attrs=None,
+    )
+
+
+def test_bridge_port_add_calls_client_with_attributes() -> None:
+    client = Mock()
+    client.add.return_value = {"ret": "*9"}
+
+    result = bridge_port_add_impl(client, attributes={"bridge": "bridge1", "interface": "ether2"})
+
+    assert result == {"ret": "*9"}
+    client.add.assert_called_once_with("/interface/bridge/port", attrs={"bridge": "bridge1", "interface": "ether2"})
+
+
+def test_bridge_port_add_requires_attributes() -> None:
+    client = Mock()
+
+    with pytest.raises(ValueError, match="attributes are required"):
+        bridge_port_add_impl(client)
+
+
+def test_bridge_port_remove_calls_client_with_item_id() -> None:
+    client = Mock()
+    client.remove.return_value = {"success": True}
+
+    result = bridge_port_remove_impl(client, item_id="*10")
+
+    assert result == {"success": True}
+    client.remove.assert_called_once_with("/interface/bridge/port", "*10")
+
+
+def test_bridge_vlan_list_builds_expected_queries() -> None:
+    client = Mock()
+    client.print.return_value = [{"bridge": "bridge1", "vlan-ids": "10"}]
+
+    result = bridge_vlan_list_impl(client, bridge="bridge1", vlan_ids="10", disabled=False)
+
+    assert result == [{"bridge": "bridge1", "vlan-ids": "10"}]
+    client.print.assert_called_once_with(
+        "/interface/bridge/vlan",
+        proplist=None,
+        queries=["bridge=bridge1", "vlan-ids=10", "disabled=false"],
+        attrs=None,
+    )
+
+
+def test_bridge_vlan_add_calls_client_with_attributes() -> None:
+    client = Mock()
+    client.add.return_value = {"ret": "*11"}
+
+    result = bridge_vlan_add_impl(
+        client,
+        attributes={"bridge": "bridge1", "vlan-ids": "10", "tagged": "bridge1,ether1"},
+    )
+
+    assert result == {"ret": "*11"}
+    client.add.assert_called_once_with(
+        "/interface/bridge/vlan",
+        attrs={"bridge": "bridge1", "vlan-ids": "10", "tagged": "bridge1,ether1"},
+    )
+
+
+def test_bridge_vlan_add_requires_attributes() -> None:
+    client = Mock()
+
+    with pytest.raises(ValueError, match="attributes are required"):
+        bridge_vlan_add_impl(client)
+
+
+def test_bridge_vlan_remove_calls_client_with_item_id() -> None:
+    client = Mock()
+    client.remove.return_value = {"success": True}
+
+    result = bridge_vlan_remove_impl(client, item_id="*13")
+
+    assert result == {"success": True}
+    client.remove.assert_called_once_with("/interface/bridge/vlan", "*13")
+
+
+def test_vlan_list_builds_expected_queries() -> None:
+    client = Mock()
+    client.print.return_value = [{"name": "vlan10", "interface": "bridge1"}]
+
+    result = vlan_list_impl(client, name="vlan10", interface="bridge1", disabled=True)
+
+    assert result == [{"name": "vlan10", "interface": "bridge1"}]
+    client.print.assert_called_once_with(
+        "/interface/vlan",
+        proplist=None,
+        queries=["name=vlan10", "interface=bridge1", "disabled=true"],
+        attrs=None,
+    )
+
+
+def test_vlan_add_calls_client_with_attributes() -> None:
+    client = Mock()
+    client.add.return_value = {"ret": "*12"}
+
+    result = vlan_add_impl(client, attributes={"name": "vlan10", "interface": "bridge1", "vlan-id": 10})
+
+    assert result == {"ret": "*12"}
+    client.add.assert_called_once_with(
+        "/interface/vlan",
+        attrs={"name": "vlan10", "interface": "bridge1", "vlan-id": 10},
+    )
+
+
+def test_vlan_add_requires_attributes() -> None:
+    client = Mock()
+
+    with pytest.raises(ValueError, match="attributes are required"):
+        vlan_add_impl(client)
+
+
+def test_vlan_remove_calls_client_with_item_id() -> None:
+    client = Mock()
+    client.remove.return_value = {"success": True}
+
+    result = vlan_remove_impl(client, item_id="*14")
+
+    assert result == {"success": True}
+    client.remove.assert_called_once_with("/interface/vlan", "*14")
+
+
+def test_firewall_filter_list_builds_expected_queries() -> None:
+    client = Mock()
+    client.print.return_value = [{"chain": "forward", "action": "drop"}]
+
+    result = firewall_filter_list_impl(client, chain="forward", action="drop", disabled=False)
+
+    assert result == [{"chain": "forward", "action": "drop"}]
+    client.print.assert_called_once_with(
+        "/ip/firewall/filter",
+        proplist=None,
+        queries=["chain=forward", "action=drop", "disabled=false"],
+        attrs=None,
+    )
+
+
+def test_firewall_filter_add_calls_client_with_attributes() -> None:
+    client = Mock()
+    client.add.return_value = {"ret": "*20"}
+
+    result = firewall_filter_add_impl(client, attributes={"chain": "forward", "action": "accept"})
+
+    assert result == {"ret": "*20"}
+    client.add.assert_called_once_with("/ip/firewall/filter", attrs={"chain": "forward", "action": "accept"})
+
+
+def test_firewall_filter_add_requires_attributes() -> None:
+    client = Mock()
+
+    with pytest.raises(ValueError, match="attributes are required"):
+        firewall_filter_add_impl(client)
+
+
+def test_firewall_filter_set_calls_client_with_item_id_and_attributes() -> None:
+    client = Mock()
+    client.set.return_value = {"success": True}
+
+    result = firewall_filter_set_impl(client, item_id="*21", attributes={"disabled": True})
+
+    assert result == {"success": True}
+    client.set.assert_called_once_with("/ip/firewall/filter", "*21", attrs={"disabled": True})
+
+
+def test_firewall_filter_set_requires_attributes() -> None:
+    client = Mock()
+
+    with pytest.raises(ValueError, match="attributes are required"):
+        firewall_filter_set_impl(client, item_id="*21")
+
+
+def test_firewall_filter_remove_calls_client_with_item_id() -> None:
+    client = Mock()
+    client.remove.return_value = {"success": True}
+
+    result = firewall_filter_remove_impl(client, item_id="*22")
+
+    assert result == {"success": True}
+    client.remove.assert_called_once_with("/ip/firewall/filter", "*22")
+
+
+def test_firewall_nat_list_builds_expected_queries() -> None:
+    client = Mock()
+    client.print.return_value = [{"chain": "srcnat", "action": "masquerade"}]
+
+    result = firewall_nat_list_impl(client, chain="srcnat", action="masquerade", disabled=True)
+
+    assert result == [{"chain": "srcnat", "action": "masquerade"}]
+    client.print.assert_called_once_with(
+        "/ip/firewall/nat",
+        proplist=None,
+        queries=["chain=srcnat", "action=masquerade", "disabled=true"],
+        attrs=None,
+    )
+
+
+def test_firewall_nat_add_calls_client_with_attributes() -> None:
+    client = Mock()
+    client.add.return_value = {"ret": "*23"}
+
+    result = firewall_nat_add_impl(client, attributes={"chain": "srcnat", "action": "masquerade"})
+
+    assert result == {"ret": "*23"}
+    client.add.assert_called_once_with("/ip/firewall/nat", attrs={"chain": "srcnat", "action": "masquerade"})
+
+
+def test_firewall_nat_add_requires_attributes() -> None:
+    client = Mock()
+
+    with pytest.raises(ValueError, match="attributes are required"):
+        firewall_nat_add_impl(client)
+
+
+def test_firewall_nat_set_calls_client_with_item_id_and_attributes() -> None:
+    client = Mock()
+    client.set.return_value = {"success": True}
+
+    result = firewall_nat_set_impl(client, item_id="*24", attributes={"disabled": False})
+
+    assert result == {"success": True}
+    client.set.assert_called_once_with("/ip/firewall/nat", "*24", attrs={"disabled": False})
+
+
+def test_firewall_nat_set_requires_attributes() -> None:
+    client = Mock()
+
+    with pytest.raises(ValueError, match="attributes are required"):
+        firewall_nat_set_impl(client, item_id="*24")
+
+
+def test_firewall_nat_remove_calls_client_with_item_id() -> None:
+    client = Mock()
+    client.remove.return_value = {"success": True}
+
+    result = firewall_nat_remove_impl(client, item_id="*25")
+
+    assert result == {"success": True}
+    client.remove.assert_called_once_with("/ip/firewall/nat", "*25")
+
+
+def test_firewall_rule_move_calls_expected_command() -> None:
+    client = Mock()
+    client.run.return_value = {"success": True}
+
+    result = firewall_rule_move_impl(client, table="filter", item_id="*26", destination="0")
+
+    assert result == {"success": True}
+    client.run.assert_called_once_with("/ip/firewall/filter/move", attrs={".id": "*26", "destination": "0"})
+
+
+def test_firewall_rule_move_rejects_invalid_table() -> None:
+    client = Mock()
+
+    with pytest.raises(ValueError, match="table must be either 'filter' or 'nat'"):
+        firewall_rule_move_impl(client, table="mangle", item_id="*26", destination="0")
+
+
+def test_firewall_rule_move_requires_destination() -> None:
+    client = Mock()
+
+    with pytest.raises(ValueError, match="destination is required"):
+        firewall_rule_move_impl(client, table="nat", item_id="*26", destination="   ")
+
+
+def test_firewall_rule_move_requires_item_id() -> None:
+    client = Mock()
+
+    with pytest.raises(ValueError, match="item_id is required"):
+        firewall_rule_move_impl(client, table="nat", item_id="   ", destination="0")
+
+
+def test_firewall_address_list_list_builds_expected_queries() -> None:
+    client = Mock()
+    client.print.return_value = [{"list": "trusted", "address": "192.0.2.10"}]
+
+    result = firewall_address_list_list_impl(
+        client,
+        list_name="trusted",
+        address="192.0.2.10",
+        disabled=False,
+    )
+
+    assert result == [{"list": "trusted", "address": "192.0.2.10"}]
+    client.print.assert_called_once_with(
+        "/ip/firewall/address-list",
+        proplist=None,
+        queries=["address=192.0.2.10", "disabled=false", "list=trusted"],
+        attrs=None,
+    )
+
+
+def test_firewall_address_list_add_calls_client_with_attributes() -> None:
+    client = Mock()
+    client.add.return_value = {"ret": "*27"}
+
+    result = firewall_address_list_add_impl(client, attributes={"list": "trusted", "address": "192.0.2.10"})
+
+    assert result == {"ret": "*27"}
+    client.add.assert_called_once_with(
+        "/ip/firewall/address-list",
+        attrs={"list": "trusted", "address": "192.0.2.10"},
+    )
+
+
+def test_firewall_address_list_add_requires_attributes() -> None:
+    client = Mock()
+
+    with pytest.raises(ValueError, match="attributes are required"):
+        firewall_address_list_add_impl(client)
+
+
+def test_firewall_address_list_remove_calls_client_with_item_id() -> None:
+    client = Mock()
+    client.remove.return_value = {"success": True}
+
+    result = firewall_address_list_remove_impl(client, item_id="*28")
+
+    assert result == {"success": True}
+    client.remove.assert_called_once_with("/ip/firewall/address-list", "*28")
+
+
+def test_ppp_active_list_builds_expected_queries() -> None:
+    client = Mock()
+    client.print.return_value = [{"name": "alice", "service": "pppoe"}]
+
+    result = ppp_active_list_impl(client, service="pppoe", name="alice")
+
+    assert result == [{"name": "alice", "service": "pppoe"}]
+    client.print.assert_called_once_with(
+        "/ppp/active",
+        proplist=None,
+        queries=["service=pppoe", "name=alice"],
+        attrs=None,
+    )
+
+
+def test_ppp_secret_list_builds_expected_queries() -> None:
+    client = Mock()
+    client.print.return_value = [{"name": "alice", "disabled": "false"}]
+
+    result = ppp_secret_list_impl(client, name="alice", service="pppoe", disabled=False)
+
+    assert result == [{"name": "alice", "disabled": "false"}]
+    client.print.assert_called_once_with(
+        "/ppp/secret",
+        proplist=None,
+        queries=["name=alice", "service=pppoe", "disabled=false"],
+        attrs=None,
+    )
+
+
+def test_ppp_secret_add_calls_client_with_attributes() -> None:
+    client = Mock()
+    client.add.return_value = {"ret": "*29"}
+
+    result = ppp_secret_add_impl(client, attributes={"name": "alice", "password": "secret", "service": "pppoe"})
+
+    assert result == {"ret": "*29"}
+    client.add.assert_called_once_with(
+        "/ppp/secret",
+        attrs={"name": "alice", "password": "secret", "service": "pppoe"},
+    )
+
+
+def test_ppp_secret_add_requires_name_and_password() -> None:
+    client = Mock()
+
+    with pytest.raises(ValueError, match="name is required"):
+        ppp_secret_add_impl(client, attributes={"password": "secret"})
+
+    with pytest.raises(ValueError, match="password is required"):
+        ppp_secret_add_impl(client, attributes={"name": "alice"})
+
+
+def test_ppp_secret_remove_calls_client_with_item_id() -> None:
+    client = Mock()
+    client.remove.return_value = {"success": True}
+
+    result = ppp_secret_remove_impl(client, item_id="*30")
+
+    assert result == {"success": True}
+    client.remove.assert_called_once_with("/ppp/secret", "*30")
+
+
+def test_wireguard_interface_list_builds_expected_queries() -> None:
+    client = Mock()
+    client.print.return_value = [{"name": "wg0", "disabled": "false"}]
+
+    result = wireguard_interface_list_impl(client, name="wg0", disabled=False)
+
+    assert result == [{"name": "wg0", "disabled": "false"}]
+    client.print.assert_called_once_with(
+        "/interface/wireguard",
+        proplist=None,
+        queries=["name=wg0", "disabled=false"],
+        attrs=None,
+    )
+
+
+def test_wireguard_interface_add_calls_client_with_attributes() -> None:
+    client = Mock()
+    client.add.return_value = {"ret": "*31"}
+
+    result = wireguard_interface_add_impl(client, attributes={"name": "wg0", "listen-port": 51820})
+
+    assert result == {"ret": "*31"}
+    client.add.assert_called_once_with(
+        "/interface/wireguard",
+        attrs={"name": "wg0", "listen-port": 51820},
+    )
+
+
+def test_wireguard_interface_add_requires_name() -> None:
+    client = Mock()
+
+    with pytest.raises(ValueError, match="name is required"):
+        wireguard_interface_add_impl(client, attributes={"listen-port": 51820})
+
+
+def test_wireguard_peer_list_builds_expected_queries() -> None:
+    client = Mock()
+    client.print.return_value = [{"interface": "wg0", "disabled": "true"}]
+
+    result = wireguard_peer_list_impl(client, interface="wg0", disabled=True)
+
+    assert result == [{"interface": "wg0", "disabled": "true"}]
+    client.print.assert_called_once_with(
+        "/interface/wireguard/peers",
+        proplist=None,
+        queries=["interface=wg0", "disabled=true"],
+        attrs=None,
+    )
+
+
+def test_wireguard_peer_add_calls_client_with_attributes() -> None:
+    client = Mock()
+    client.add.return_value = {"ret": "*32"}
+
+    result = wireguard_peer_add_impl(
+        client,
+        attributes={"interface": "wg0", "public-key": "abc123", "allowed-address": "10.0.0.2/32"},
+    )
+
+    assert result == {"ret": "*32"}
+    client.add.assert_called_once_with(
+        "/interface/wireguard/peers",
+        attrs={"interface": "wg0", "public-key": "abc123", "allowed-address": "10.0.0.2/32"},
+    )
+
+
+def test_wireguard_peer_add_requires_interface_and_public_key() -> None:
+    client = Mock()
+
+    with pytest.raises(ValueError, match="interface is required"):
+        wireguard_peer_add_impl(client, attributes={"public-key": "abc123"})
+
+    with pytest.raises(ValueError, match="public-key is required"):
+        wireguard_peer_add_impl(client, attributes={"interface": "wg0"})
+
+
+def test_wireguard_peer_remove_calls_client_with_item_id() -> None:
+    client = Mock()
+    client.remove.return_value = {"success": True}
+
+    result = wireguard_peer_remove_impl(client, item_id="*33")
+
+    assert result == {"success": True}
+    client.remove.assert_called_once_with("/interface/wireguard/peers", "*33")
 
 
 def test_ip_address_list_builds_expected_queries() -> None:
@@ -432,13 +990,13 @@ def test_file_download_defaults_to_local_backups_directory(tmp_path: Path, monke
 
     result = file_download_impl(client, router_path=router_path, downloader=downloader)
 
-    expected_path = WORKSPACE_ROOT / "backups" / "pytest-unique-router.backup"
-    assert result == {
-        "success": True,
-        "router_path": router_path,
-        "local_path": str(expected_path),
-    }
-    assert downloader.calls == [(router_path, expected_path)]
+    local_path = Path(str(result["local_path"]))
+    assert result["success"] is True
+    assert result["router_path"] == router_path
+    assert local_path.parent == WORKSPACE_ROOT / "backups"
+    assert local_path.name.startswith("pytest-unique-router")
+    assert local_path.suffix == ".backup"
+    assert downloader.calls == [(router_path, local_path)]
 
 
 def test_file_download_resolves_relative_local_path_from_workspace_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

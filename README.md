@@ -2,15 +2,18 @@
 
 MikroTik Manager is an OpenCode workspace for managing MikroTik routers through a local MCP server.
 
-Current status: Phase 1 is implemented in `packages/mcp-server/`.
+Current status: Phases 1-5 are implemented in `packages/mcp-server/`.
 
 Implemented today:
 - RouterOS API client over TCP/TLS
 - `/login`
 - RouterOS word and sentence encoding/decoding
 - stdio MCP bootstrap with FastMCP
-- generic `resource_print` tool
+- generic read/mutation tools
 - optional `jq_filter` support for `resource_print`
+- core operational read tools for system, interfaces, addresses, routes, DHCP, and DNS
+- file listing, file download, and backup collection workflow
+- bridge, VLAN, firewall, PPP, and WireGuard tools
 - mocked pytest coverage for client and tool behavior
 
 ## Layout
@@ -101,16 +104,53 @@ Current phases expose these MCP tools:
 - `dhcp_network_list`: list configured DHCP networks
 - `dns_get`: get RouterOS DNS settings
 - `dns_set`: update RouterOS DNS settings
+- `file_list`: list router files with optional directory, name, and type filters
+- `system_backup_save`: create a RouterOS backup file on the router
+- `system_export`: export RouterOS configuration to an `.rsc` file on the router
+- `file_download`: download a router file into the local workspace
+- `system_backup_collect`: create and download router backup artifacts
+- `bridge_list`: list bridges with optional name and disabled filters
+- `bridge_add`: create a bridge using RouterOS bridge attributes
+- `bridge_remove`: remove a bridge by `item_id`
+- `bridge_port_list`: list bridge ports with optional bridge, interface, and disabled filters
+- `bridge_port_add`: add a bridge port using RouterOS bridge port attributes
+- `bridge_port_remove`: remove a bridge port by `item_id`
+- `bridge_vlan_list`: list bridge VLAN entries with optional bridge, VLAN ID, and disabled filters
+- `bridge_vlan_add`: add a bridge VLAN entry using RouterOS bridge VLAN attributes
+- `bridge_vlan_remove`: remove a bridge VLAN entry by `item_id`
+- `vlan_list`: list VLAN interfaces with optional name, parent interface, and disabled filters
+- `vlan_add`: create a VLAN interface using RouterOS VLAN attributes
+- `vlan_remove`: remove a VLAN interface by `item_id`
+- `firewall_filter_list`: list firewall filter rules with optional chain, action, and disabled filters
+- `firewall_filter_add`: add a firewall filter rule using RouterOS firewall attributes
+- `firewall_filter_set`: update a firewall filter rule by `item_id`
+- `firewall_filter_remove`: remove a firewall filter rule by `item_id`
+- `firewall_nat_list`: list firewall NAT rules with optional chain, action, and disabled filters
+- `firewall_nat_add`: add a firewall NAT rule using RouterOS firewall attributes
+- `firewall_nat_set`: update a firewall NAT rule by `item_id`
+- `firewall_nat_remove`: remove a firewall NAT rule by `item_id`
+- `firewall_rule_move`: move a firewall filter or NAT rule by `item_id`
+- `firewall_address_list_list`: list firewall address-list entries with optional list, address, and disabled filters
+- `firewall_address_list_add`: add a firewall address-list entry using RouterOS firewall attributes
+- `firewall_address_list_remove`: remove a firewall address-list entry by `item_id`
+- `ppp_active_list`: list active PPP sessions with optional service and name filters
+- `ppp_secret_list`: list PPP secrets with optional name, service, and disabled filters
+- `ppp_secret_add`: create a PPP secret using RouterOS PPP secret attributes
+- `ppp_secret_remove`: remove a PPP secret by `item_id`
+- `wireguard_interface_list`: list WireGuard interfaces with optional name and disabled filters
+- `wireguard_interface_add`: create a WireGuard interface using RouterOS WireGuard attributes
+- `wireguard_peer_list`: list WireGuard peers with optional interface and disabled filters
+- `wireguard_peer_add`: create a WireGuard peer using RouterOS peer attributes
+- `wireguard_peer_remove`: remove a WireGuard peer by `item_id`
 
 `jq_filter` is applied only after RouterOS replies have been normalized into Python JSON-like data.
 
 ## Next
 
-Phase 5 is next:
+Phase 6 is next:
 
-- bridge and VLAN tools
-- firewall filter/NAT/address-list tools
-- PPP tools
-- WireGuard tools
+- streaming and long-running command support
+- tagged command handling and cancellation
+- selected monitor and diagnostics tools where MCP UX makes sense
 
 See `docs/implementation-phases.md` for the full roadmap.

@@ -112,6 +112,33 @@ def _normalize_router_file_path(router_path: str) -> str:
     return value
 
 
+def _require_attributes(attributes: dict[str, Any] | None) -> dict[str, Any]:
+    if not attributes:
+        raise ValueError("attributes are required")
+    return attributes
+
+
+def _normalize_firewall_table(table: str) -> str:
+    value = table.strip().lower()
+    if value not in {"filter", "nat"}:
+        raise ValueError("table must be either 'filter' or 'nat'")
+    return value
+
+
+def _normalize_move_destination(destination: str) -> str:
+    value = destination.strip()
+    if not value:
+        raise ValueError("destination is required")
+    return value
+
+
+def _normalize_required_string(value: str, *, field_name: str) -> str:
+    normalized = value.strip()
+    if not normalized:
+        raise ValueError(f"{field_name} is required")
+    return normalized
+
+
 def _safe_name_component(value: str, *, default: str) -> str:
     cleaned = "".join(char if char.isalnum() or char in {"-", "_"} else "-" for char in value.strip().lower())
     collapsed = "-".join(part for part in cleaned.split("-") if part)
@@ -279,6 +306,320 @@ def interface_get_impl(
     field, value = _require_exactly_one_locator("interface", name=name, item_id=item_id)
     query_field = ".id" if field == "item_id" else "name"
     return _print_single_record(client, menu="/interface", queries=[f"{query_field}={value}"], entity_name="interface")
+
+
+def bridge_list_impl(
+    client: RouterOSClient,
+    *,
+    name: str | None = None,
+    disabled: bool | None = None,
+) -> list[dict[str, str]]:
+    queries = _build_equality_queries(name=name, disabled=disabled)
+    return _print_records(client, menu="/interface/bridge", queries=queries or None)
+
+
+def bridge_add_impl(
+    client: RouterOSClient,
+    *,
+    attributes: dict[str, Any] | None = None,
+) -> dict[str, str] | dict[str, bool]:
+    return client.add("/interface/bridge", attrs=_require_attributes(attributes))
+
+
+def bridge_remove_impl(
+    client: RouterOSClient,
+    *,
+    item_id: str,
+) -> dict[str, str] | dict[str, bool]:
+    return client.remove("/interface/bridge", item_id)
+
+
+def bridge_port_list_impl(
+    client: RouterOSClient,
+    *,
+    bridge: str | None = None,
+    interface: str | None = None,
+    disabled: bool | None = None,
+) -> list[dict[str, str]]:
+    queries = _build_equality_queries(bridge=bridge, interface=interface, disabled=disabled)
+    return _print_records(client, menu="/interface/bridge/port", queries=queries or None)
+
+
+def bridge_port_add_impl(
+    client: RouterOSClient,
+    *,
+    attributes: dict[str, Any] | None = None,
+) -> dict[str, str] | dict[str, bool]:
+    return client.add("/interface/bridge/port", attrs=_require_attributes(attributes))
+
+
+def bridge_port_remove_impl(
+    client: RouterOSClient,
+    *,
+    item_id: str,
+) -> dict[str, str] | dict[str, bool]:
+    return client.remove("/interface/bridge/port", item_id)
+
+
+def bridge_vlan_list_impl(
+    client: RouterOSClient,
+    *,
+    bridge: str | None = None,
+    vlan_ids: str | None = None,
+    disabled: bool | None = None,
+) -> list[dict[str, str]]:
+    queries = _build_equality_queries(bridge=bridge, **{"vlan-ids": vlan_ids, "disabled": disabled})
+    return _print_records(client, menu="/interface/bridge/vlan", queries=queries or None)
+
+
+def bridge_vlan_add_impl(
+    client: RouterOSClient,
+    *,
+    attributes: dict[str, Any] | None = None,
+) -> dict[str, str] | dict[str, bool]:
+    return client.add("/interface/bridge/vlan", attrs=_require_attributes(attributes))
+
+
+def bridge_vlan_remove_impl(
+    client: RouterOSClient,
+    *,
+    item_id: str,
+) -> dict[str, str] | dict[str, bool]:
+    return client.remove("/interface/bridge/vlan", item_id)
+
+
+def vlan_list_impl(
+    client: RouterOSClient,
+    *,
+    name: str | None = None,
+    interface: str | None = None,
+    disabled: bool | None = None,
+) -> list[dict[str, str]]:
+    queries = _build_equality_queries(name=name, interface=interface, disabled=disabled)
+    return _print_records(client, menu="/interface/vlan", queries=queries or None)
+
+
+def vlan_add_impl(
+    client: RouterOSClient,
+    *,
+    attributes: dict[str, Any] | None = None,
+) -> dict[str, str] | dict[str, bool]:
+    return client.add("/interface/vlan", attrs=_require_attributes(attributes))
+
+
+def vlan_remove_impl(
+    client: RouterOSClient,
+    *,
+    item_id: str,
+) -> dict[str, str] | dict[str, bool]:
+    return client.remove("/interface/vlan", item_id)
+
+
+def firewall_filter_list_impl(
+    client: RouterOSClient,
+    *,
+    chain: str | None = None,
+    action: str | None = None,
+    disabled: bool | None = None,
+) -> list[dict[str, str]]:
+    queries = _build_equality_queries(chain=chain, action=action, disabled=disabled)
+    return _print_records(client, menu="/ip/firewall/filter", queries=queries or None)
+
+
+def firewall_filter_add_impl(
+    client: RouterOSClient,
+    *,
+    attributes: dict[str, Any] | None = None,
+) -> dict[str, str] | dict[str, bool]:
+    return client.add("/ip/firewall/filter", attrs=_require_attributes(attributes))
+
+
+def firewall_filter_set_impl(
+    client: RouterOSClient,
+    *,
+    item_id: str,
+    attributes: dict[str, Any] | None = None,
+) -> dict[str, str] | dict[str, bool]:
+    return client.set("/ip/firewall/filter", item_id, attrs=_require_attributes(attributes))
+
+
+def firewall_filter_remove_impl(
+    client: RouterOSClient,
+    *,
+    item_id: str,
+) -> dict[str, str] | dict[str, bool]:
+    return client.remove("/ip/firewall/filter", item_id)
+
+
+def firewall_nat_list_impl(
+    client: RouterOSClient,
+    *,
+    chain: str | None = None,
+    action: str | None = None,
+    disabled: bool | None = None,
+) -> list[dict[str, str]]:
+    queries = _build_equality_queries(chain=chain, action=action, disabled=disabled)
+    return _print_records(client, menu="/ip/firewall/nat", queries=queries or None)
+
+
+def firewall_nat_add_impl(
+    client: RouterOSClient,
+    *,
+    attributes: dict[str, Any] | None = None,
+) -> dict[str, str] | dict[str, bool]:
+    return client.add("/ip/firewall/nat", attrs=_require_attributes(attributes))
+
+
+def firewall_nat_set_impl(
+    client: RouterOSClient,
+    *,
+    item_id: str,
+    attributes: dict[str, Any] | None = None,
+) -> dict[str, str] | dict[str, bool]:
+    return client.set("/ip/firewall/nat", item_id, attrs=_require_attributes(attributes))
+
+
+def firewall_nat_remove_impl(
+    client: RouterOSClient,
+    *,
+    item_id: str,
+) -> dict[str, str] | dict[str, bool]:
+    return client.remove("/ip/firewall/nat", item_id)
+
+
+def firewall_rule_move_impl(
+    client: RouterOSClient,
+    *,
+    table: str,
+    item_id: str,
+    destination: str,
+) -> dict[str, str] | dict[str, bool]:
+    normalized_table = _normalize_firewall_table(table)
+    return client.run(
+        f"/ip/firewall/{normalized_table}/move",
+        attrs={".id": _normalize_required_string(item_id, field_name="item_id"), "destination": _normalize_move_destination(destination)},
+    )
+
+
+def firewall_address_list_list_impl(
+    client: RouterOSClient,
+    *,
+    list_name: str | None = None,
+    address: str | None = None,
+    disabled: bool | None = None,
+) -> list[dict[str, str]]:
+    queries = _build_equality_queries(address=address, disabled=disabled, **{"list": list_name})
+    return _print_records(client, menu="/ip/firewall/address-list", queries=queries or None)
+
+
+def firewall_address_list_add_impl(
+    client: RouterOSClient,
+    *,
+    attributes: dict[str, Any] | None = None,
+) -> dict[str, str] | dict[str, bool]:
+    return client.add("/ip/firewall/address-list", attrs=_require_attributes(attributes))
+
+
+def firewall_address_list_remove_impl(
+    client: RouterOSClient,
+    *,
+    item_id: str,
+) -> dict[str, str] | dict[str, bool]:
+    return client.remove("/ip/firewall/address-list", item_id)
+
+
+def _require_attribute_fields(attributes: dict[str, Any] | None, *, required_fields: Sequence[str]) -> dict[str, Any]:
+    normalized = _require_attributes(attributes)
+    missing = [field for field in required_fields if field not in normalized or not str(normalized[field]).strip()]
+    if missing:
+        if len(missing) == 1:
+            raise ValueError(f"{missing[0]} is required")
+        raise ValueError(f"Required attributes are missing: {', '.join(missing)}")
+    return normalized
+
+
+def ppp_active_list_impl(
+    client: RouterOSClient,
+    *,
+    service: str | None = None,
+    name: str | None = None,
+) -> list[dict[str, str]]:
+    queries = _build_equality_queries(service=service, name=name)
+    return _print_records(client, menu="/ppp/active", queries=queries or None)
+
+
+def ppp_secret_list_impl(
+    client: RouterOSClient,
+    *,
+    name: str | None = None,
+    service: str | None = None,
+    disabled: bool | None = None,
+) -> list[dict[str, str]]:
+    queries = _build_equality_queries(name=name, service=service, disabled=disabled)
+    return _print_records(client, menu="/ppp/secret", queries=queries or None)
+
+
+def ppp_secret_add_impl(
+    client: RouterOSClient,
+    *,
+    attributes: dict[str, Any] | None = None,
+) -> dict[str, str] | dict[str, bool]:
+    normalized = _require_attribute_fields(attributes, required_fields=("name", "password"))
+    return client.add("/ppp/secret", attrs=normalized)
+
+
+def ppp_secret_remove_impl(
+    client: RouterOSClient,
+    *,
+    item_id: str,
+) -> dict[str, str] | dict[str, bool]:
+    return client.remove("/ppp/secret", item_id)
+
+
+def wireguard_interface_list_impl(
+    client: RouterOSClient,
+    *,
+    name: str | None = None,
+    disabled: bool | None = None,
+) -> list[dict[str, str]]:
+    queries = _build_equality_queries(name=name, disabled=disabled)
+    return _print_records(client, menu="/interface/wireguard", queries=queries or None)
+
+
+def wireguard_interface_add_impl(
+    client: RouterOSClient,
+    *,
+    attributes: dict[str, Any] | None = None,
+) -> dict[str, str] | dict[str, bool]:
+    normalized = _require_attribute_fields(attributes, required_fields=("name",))
+    return client.add("/interface/wireguard", attrs=normalized)
+
+
+def wireguard_peer_list_impl(
+    client: RouterOSClient,
+    *,
+    interface: str | None = None,
+    disabled: bool | None = None,
+) -> list[dict[str, str]]:
+    queries = _build_equality_queries(interface=interface, disabled=disabled)
+    return _print_records(client, menu="/interface/wireguard/peers", queries=queries or None)
+
+
+def wireguard_peer_add_impl(
+    client: RouterOSClient,
+    *,
+    attributes: dict[str, Any] | None = None,
+) -> dict[str, str] | dict[str, bool]:
+    normalized = _require_attribute_fields(attributes, required_fields=("interface", "public-key"))
+    return client.add("/interface/wireguard/peers", attrs=normalized)
+
+
+def wireguard_peer_remove_impl(
+    client: RouterOSClient,
+    *,
+    item_id: str,
+) -> dict[str, str] | dict[str, bool]:
+    return client.remove("/interface/wireguard/peers", item_id)
 
 
 def ip_address_list_impl(
@@ -569,6 +910,208 @@ def create_app(client: RouterOSClient) -> FastMCP:
         item_id: str | None = None,
     ) -> dict[str, str]:
         return interface_get_impl(client, name=name, item_id=item_id)
+
+    @app.tool(description="List bridges with optional name and disabled filters.")
+    def bridge_list(
+        name: str | None = None,
+        disabled: bool | None = None,
+    ) -> list[dict[str, str]]:
+        return bridge_list_impl(client, name=name, disabled=disabled)
+
+    @app.tool(description="Create a bridge using RouterOS bridge attributes.")
+    def bridge_add(
+        attributes: dict[str, Any] | None = None,
+    ) -> dict[str, str] | dict[str, bool]:
+        return bridge_add_impl(client, attributes=attributes)
+
+    @app.tool(description="Remove a bridge by RouterOS item id.")
+    def bridge_remove(item_id: str) -> dict[str, str] | dict[str, bool]:
+        return bridge_remove_impl(client, item_id=item_id)
+
+    @app.tool(description="List bridge ports with optional bridge, interface, and disabled filters.")
+    def bridge_port_list(
+        bridge: str | None = None,
+        interface: str | None = None,
+        disabled: bool | None = None,
+    ) -> list[dict[str, str]]:
+        return bridge_port_list_impl(client, bridge=bridge, interface=interface, disabled=disabled)
+
+    @app.tool(description="Add a bridge port using RouterOS bridge port attributes.")
+    def bridge_port_add(
+        attributes: dict[str, Any] | None = None,
+    ) -> dict[str, str] | dict[str, bool]:
+        return bridge_port_add_impl(client, attributes=attributes)
+
+    @app.tool(description="Remove a bridge port by RouterOS item id.")
+    def bridge_port_remove(item_id: str) -> dict[str, str] | dict[str, bool]:
+        return bridge_port_remove_impl(client, item_id=item_id)
+
+    @app.tool(description="List bridge VLAN entries with optional bridge, VLAN ID, and disabled filters.")
+    def bridge_vlan_list(
+        bridge: str | None = None,
+        vlan_ids: str | None = None,
+        disabled: bool | None = None,
+    ) -> list[dict[str, str]]:
+        return bridge_vlan_list_impl(client, bridge=bridge, vlan_ids=vlan_ids, disabled=disabled)
+
+    @app.tool(description="Add a bridge VLAN entry using RouterOS bridge VLAN attributes.")
+    def bridge_vlan_add(
+        attributes: dict[str, Any] | None = None,
+    ) -> dict[str, str] | dict[str, bool]:
+        return bridge_vlan_add_impl(client, attributes=attributes)
+
+    @app.tool(description="Remove a bridge VLAN entry by RouterOS item id.")
+    def bridge_vlan_remove(item_id: str) -> dict[str, str] | dict[str, bool]:
+        return bridge_vlan_remove_impl(client, item_id=item_id)
+
+    @app.tool(description="List VLAN interfaces with optional name, parent interface, and disabled filters.")
+    def vlan_list(
+        name: str | None = None,
+        interface: str | None = None,
+        disabled: bool | None = None,
+    ) -> list[dict[str, str]]:
+        return vlan_list_impl(client, name=name, interface=interface, disabled=disabled)
+
+    @app.tool(description="Create a VLAN interface using RouterOS VLAN attributes.")
+    def vlan_add(
+        attributes: dict[str, Any] | None = None,
+    ) -> dict[str, str] | dict[str, bool]:
+        return vlan_add_impl(client, attributes=attributes)
+
+    @app.tool(description="Remove a VLAN interface by RouterOS item id.")
+    def vlan_remove(item_id: str) -> dict[str, str] | dict[str, bool]:
+        return vlan_remove_impl(client, item_id=item_id)
+
+    @app.tool(description="List firewall filter rules with optional chain, action, and disabled filters.")
+    def firewall_filter_list(
+        chain: str | None = None,
+        action: str | None = None,
+        disabled: bool | None = None,
+    ) -> list[dict[str, str]]:
+        return firewall_filter_list_impl(client, chain=chain, action=action, disabled=disabled)
+
+    @app.tool(description="Add a firewall filter rule using RouterOS firewall attributes.")
+    def firewall_filter_add(
+        attributes: dict[str, Any] | None = None,
+    ) -> dict[str, str] | dict[str, bool]:
+        return firewall_filter_add_impl(client, attributes=attributes)
+
+    @app.tool(description="Update a firewall filter rule by RouterOS item id.")
+    def firewall_filter_set(
+        item_id: str,
+        attributes: dict[str, Any] | None = None,
+    ) -> dict[str, str] | dict[str, bool]:
+        return firewall_filter_set_impl(client, item_id=item_id, attributes=attributes)
+
+    @app.tool(description="Remove a firewall filter rule by RouterOS item id.")
+    def firewall_filter_remove(item_id: str) -> dict[str, str] | dict[str, bool]:
+        return firewall_filter_remove_impl(client, item_id=item_id)
+
+    @app.tool(description="List firewall NAT rules with optional chain, action, and disabled filters.")
+    def firewall_nat_list(
+        chain: str | None = None,
+        action: str | None = None,
+        disabled: bool | None = None,
+    ) -> list[dict[str, str]]:
+        return firewall_nat_list_impl(client, chain=chain, action=action, disabled=disabled)
+
+    @app.tool(description="Add a firewall NAT rule using RouterOS firewall attributes.")
+    def firewall_nat_add(
+        attributes: dict[str, Any] | None = None,
+    ) -> dict[str, str] | dict[str, bool]:
+        return firewall_nat_add_impl(client, attributes=attributes)
+
+    @app.tool(description="Update a firewall NAT rule by RouterOS item id.")
+    def firewall_nat_set(
+        item_id: str,
+        attributes: dict[str, Any] | None = None,
+    ) -> dict[str, str] | dict[str, bool]:
+        return firewall_nat_set_impl(client, item_id=item_id, attributes=attributes)
+
+    @app.tool(description="Remove a firewall NAT rule by RouterOS item id.")
+    def firewall_nat_remove(item_id: str) -> dict[str, str] | dict[str, bool]:
+        return firewall_nat_remove_impl(client, item_id=item_id)
+
+    @app.tool(description="Move a firewall filter or NAT rule to a new destination position or item id.")
+    def firewall_rule_move(
+        table: str,
+        item_id: str,
+        destination: str,
+    ) -> dict[str, str] | dict[str, bool]:
+        return firewall_rule_move_impl(client, table=table, item_id=item_id, destination=destination)
+
+    @app.tool(description="List firewall address-list entries with optional list, address, and disabled filters.")
+    def firewall_address_list_list(
+        list_name: str | None = None,
+        address: str | None = None,
+        disabled: bool | None = None,
+    ) -> list[dict[str, str]]:
+        return firewall_address_list_list_impl(client, list_name=list_name, address=address, disabled=disabled)
+
+    @app.tool(description="Add a firewall address-list entry using RouterOS firewall attributes.")
+    def firewall_address_list_add(
+        attributes: dict[str, Any] | None = None,
+    ) -> dict[str, str] | dict[str, bool]:
+        return firewall_address_list_add_impl(client, attributes=attributes)
+
+    @app.tool(description="Remove a firewall address-list entry by RouterOS item id.")
+    def firewall_address_list_remove(item_id: str) -> dict[str, str] | dict[str, bool]:
+        return firewall_address_list_remove_impl(client, item_id=item_id)
+
+    @app.tool(description="List active PPP sessions with optional service and name filters.")
+    def ppp_active_list(
+        service: str | None = None,
+        name: str | None = None,
+    ) -> list[dict[str, str]]:
+        return ppp_active_list_impl(client, service=service, name=name)
+
+    @app.tool(description="List PPP secrets with optional name, service, and disabled filters.")
+    def ppp_secret_list(
+        name: str | None = None,
+        service: str | None = None,
+        disabled: bool | None = None,
+    ) -> list[dict[str, str]]:
+        return ppp_secret_list_impl(client, name=name, service=service, disabled=disabled)
+
+    @app.tool(description="Create a PPP secret using RouterOS PPP secret attributes.")
+    def ppp_secret_add(
+        attributes: dict[str, Any] | None = None,
+    ) -> dict[str, str] | dict[str, bool]:
+        return ppp_secret_add_impl(client, attributes=attributes)
+
+    @app.tool(description="Remove a PPP secret by RouterOS item id.")
+    def ppp_secret_remove(item_id: str) -> dict[str, str] | dict[str, bool]:
+        return ppp_secret_remove_impl(client, item_id=item_id)
+
+    @app.tool(description="List WireGuard interfaces with optional name and disabled filters.")
+    def wireguard_interface_list(
+        name: str | None = None,
+        disabled: bool | None = None,
+    ) -> list[dict[str, str]]:
+        return wireguard_interface_list_impl(client, name=name, disabled=disabled)
+
+    @app.tool(description="Create a WireGuard interface using RouterOS WireGuard attributes.")
+    def wireguard_interface_add(
+        attributes: dict[str, Any] | None = None,
+    ) -> dict[str, str] | dict[str, bool]:
+        return wireguard_interface_add_impl(client, attributes=attributes)
+
+    @app.tool(description="List WireGuard peers with optional interface and disabled filters.")
+    def wireguard_peer_list(
+        interface: str | None = None,
+        disabled: bool | None = None,
+    ) -> list[dict[str, str]]:
+        return wireguard_peer_list_impl(client, interface=interface, disabled=disabled)
+
+    @app.tool(description="Create a WireGuard peer using RouterOS peer attributes.")
+    def wireguard_peer_add(
+        attributes: dict[str, Any] | None = None,
+    ) -> dict[str, str] | dict[str, bool]:
+        return wireguard_peer_add_impl(client, attributes=attributes)
+
+    @app.tool(description="Remove a WireGuard peer by RouterOS item id.")
+    def wireguard_peer_remove(item_id: str) -> dict[str, str] | dict[str, bool]:
+        return wireguard_peer_remove_impl(client, item_id=item_id)
 
     @app.tool(description="List IP addresses with optional interface and disabled filters.")
     def ip_address_list(

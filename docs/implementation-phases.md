@@ -110,6 +110,8 @@ Why this is separate:
 
 ## Phase 5: Firewall, Bridge, VLAN, VPN
 
+Status: done.
+
 Deliverables:
 
 - bridge and VLAN tools
@@ -117,11 +119,18 @@ Deliverables:
 - PPP tools
 - WireGuard tools
 
-What needs to be done:
+What was done:
 
 - build dedicated wrappers around the generic mutation/read layer
 - add careful validation for destructive changes
 - test rule ordering and id-based updates
+
+Definition of done:
+
+- bridge, bridge port, bridge VLAN, and VLAN tools are registered in the MCP server
+- firewall filter, NAT, address-list, and rule move tools are available with explicit destructive-action validation
+- PPP and WireGuard wrappers are available with minimal required-field validation for add operations
+- mocked pytest coverage passes locally
 
 Why later:
 
@@ -200,9 +209,9 @@ These apply in every phase:
 
 ## Recommended Immediate Next Steps
 
-1. Implement bridge and VLAN tools.
-2. Implement firewall filter/NAT/address-list tools.
-3. Implement PPP and WireGuard tools.
-4. Add validation for destructive network changes.
-5. Add tests for rule ordering and id-based updates.
-6. Keep Phases 1-4 coverage passing while expanding to Phase 5.
+1. Implement tagged command handling for long-running RouterOS operations.
+2. Add `resource_listen` and `command_cancel`.
+3. Define safe MCP UX for streamed monitor and diagnostics output.
+4. Add cancellation and interrupted-command tests.
+5. Tighten response formatting for common operational tools.
+6. Add dedicated wrappers for high-value commands such as ping and traceroute.
