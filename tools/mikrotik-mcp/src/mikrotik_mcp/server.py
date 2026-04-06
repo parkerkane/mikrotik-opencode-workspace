@@ -18,7 +18,9 @@ from .tool_impls.core import (
     dhcp_network_list_impl,
     dhcp_server_list_impl,
     dns_get_impl,
+    dns_resolve_impl,
     dns_set_impl,
+    interface_monitor_impl,
     interface_get_impl,
     interface_list_impl,
     ip_address_get_impl,
@@ -34,6 +36,7 @@ from .tool_impls.core import (
     system_identity_get_impl,
     system_resource_get_impl,
     tool_ping_impl,
+    tool_traceroute_impl,
 )
 from .tool_impls.files import file_download_impl, file_list_impl, system_backup_collect_impl, system_backup_save_impl, system_export_impl
 from .tool_impls.layer2 import (
@@ -82,7 +85,9 @@ __all__ = [
     "dhcp_network_list_impl",
     "dhcp_server_list_impl",
     "dns_get_impl",
+    "dns_resolve_impl",
     "dns_set_impl",
+    "interface_monitor_impl",
     "file_download_impl",
     "file_list_impl",
     "firewall_address_list_add_impl",
@@ -121,6 +126,7 @@ __all__ = [
     "system_identity_get_impl",
     "system_resource_get_impl",
     "tool_ping_impl",
+    "tool_traceroute_impl",
     "vlan_add_impl",
     "vlan_list_impl",
     "vlan_remove_impl",

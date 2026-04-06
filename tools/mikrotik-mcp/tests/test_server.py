@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, Mock
 import pytest
 
 from mikrotik_mcp.app import create_app
-from mikrotik_mcp.client import ListenResult
+from mikrotik_mcp.client import ListenResult, RouterOSError
 from mikrotik_mcp.downloads import RouterFileDownloadError
 from mikrotik_mcp import server_helpers
 from mikrotik_mcp.tool_impls import files as file_tool_impls
@@ -26,6 +26,7 @@ from mikrotik_mcp.server import (
     dhcp_network_list_impl,
     dhcp_server_list_impl,
     dns_get_impl,
+    dns_resolve_impl,
     dns_set_impl,
     firewall_address_list_add_impl,
     firewall_address_list_list_impl,
@@ -43,6 +44,7 @@ from mikrotik_mcp.server import (
     file_list_impl,
     interface_get_impl,
     interface_list_impl,
+    interface_monitor_impl,
     ip_address_get_impl,
     ip_address_list_impl,
     ip_route_get_impl,
@@ -63,6 +65,7 @@ from mikrotik_mcp.server import (
     system_identity_get_impl,
     system_resource_get_impl,
     tool_ping_impl,
+    tool_traceroute_impl,
     vlan_add_impl,
     vlan_list_impl,
     vlan_remove_impl,
@@ -156,6 +159,95 @@ async def test_app_dns_get_returns_summary_line_and_structured_content(socket_en
     assert result.structuredContent == client.print.return_value[0]
     assert "DNS settings: servers 1.1.1.1,8.8.8.8, remote requests yes" in result.content[0].text
     assert "| servers | 1.1.1.1,8.8.8.8 |" in result.content[0].text
+
+
+@pytest.mark.asyncio
+async def test_app_tool_ping_returns_formatted_markdown_and_structured_content(socket_enabled) -> None:
+    client = Mock()
+    isolated_client = Mock()
+    isolated_client.run.return_value = [
+        {"seq": "0", "host": "192.0.2.1", "size": "56", "ttl": "64", "time": "4ms", "status": "reachable"}
+    ]
+    client.isolated.return_value = isolated_client_mock(isolated_client)
+
+    result = await create_app(client).call_tool("tool_ping", {"address": "192.0.2.1", "count": 1})
+
+    assert result.structuredContent == {"address": "192.0.2.1", "result": isolated_client.run.return_value}
+    assert "Ping 192.0.2.1: 1 probe" in result.content[0].text
+    assert "| Seq | Host | Size | TTL | Time | Status |" in result.content[0].text
+    assert "| 0 | 192.0.2.1 | 56 | 64 | 4ms | reachable |" in result.content[0].text
+
+
+@pytest.mark.asyncio
+async def test_app_tool_traceroute_returns_formatted_markdown_and_structured_content(socket_enabled) -> None:
+    client = Mock()
+    isolated_client = Mock()
+    isolated_client.run.return_value = [
+        {
+            "hop": "1",
+            "host": "edge-router",
+            "address": "198.51.100.1",
+            "loss": "0%",
+            "last": "2ms",
+            "avg": "2ms",
+            "best": "2ms",
+            "worst": "3ms",
+            "status": "reachable",
+        }
+    ]
+    client.isolated.return_value = isolated_client_mock(isolated_client)
+
+    result = await create_app(client).call_tool("tool_traceroute", {"address": "example.com"})
+
+    assert result.structuredContent == {"address": "example.com", "result": isolated_client.run.return_value}
+    assert "Traceroute example.com: 1 hop" in result.content[0].text
+    assert "| Hop | Host | Address | Loss | Last | Avg | Best | Worst | Status |" in result.content[0].text
+    assert "| 1 | edge-router | 198.51.100.1 | 0% | 2ms | 2ms | 2ms | 3ms | reachable |" in result.content[0].text
+
+
+@pytest.mark.asyncio
+async def test_app_dns_resolve_returns_summary_line_and_structured_content(socket_enabled) -> None:
+    client = Mock()
+    isolated_client = Mock()
+    isolated_client.run.return_value = {"ret": "93.184.216.34"}
+    client.isolated.return_value = isolated_client_mock(isolated_client)
+
+    result = await create_app(client).call_tool("dns_resolve", {"name": "example.com"})
+
+    assert result.structuredContent == {"name": "example.com", "address": "93.184.216.34"}
+    assert "DNS resolve: example.com -> 93.184.216.34" in result.content[0].text
+    assert "| name | example.com |" in result.content[0].text
+    assert "| address | 93.184.216.34 |" in result.content[0].text
+
+
+@pytest.mark.asyncio
+async def test_app_interface_monitor_returns_summary_line_and_structured_content(socket_enabled) -> None:
+    client = Mock()
+    isolated_client = Mock()
+    isolated_client.run.return_value = [
+        {
+            "status": "running",
+            "rx-bits-per-second": "1000000",
+            "tx-bits-per-second": "250000",
+            "rx-packets-per-second": "125",
+            "tx-packets-per-second": "40",
+        }
+    ]
+    client.isolated.return_value = isolated_client_mock(isolated_client)
+
+    result = await create_app(client).call_tool("interface_monitor", {"name": "ether1"})
+
+    assert result.structuredContent == {
+        "name": "ether1",
+        "status": "running",
+        "rx-bits-per-second": "1000000",
+        "tx-bits-per-second": "250000",
+        "rx-packets-per-second": "125",
+        "tx-packets-per-second": "40",
+    }
+    assert "Interface monitor ether1: rx 1000000, tx 250000" in result.content[0].text
+    assert "| status | running |" in result.content[0].text
+    assert "| rx-bits-per-second | 1000000 |" in result.content[0].text
 
 
 @pytest.mark.asyncio
@@ -358,6 +450,16 @@ def test_tool_ping_returns_empty_list_when_router_only_returns_done() -> None:
     assert result == []
 
 
+def test_tool_ping_propagates_router_errors() -> None:
+    client = Mock()
+    isolated_client = Mock()
+    isolated_client.run.side_effect = RouterOSError("RouterOS command failed: timeout")
+    client.isolated.return_value = isolated_client_mock(isolated_client)
+
+    with pytest.raises(RouterOSError, match="timeout"):
+        tool_ping_impl(client, address="192.0.2.1")
+
+
 @pytest.mark.parametrize(
     ("kwargs", "message"),
     [
@@ -372,6 +474,171 @@ def test_tool_ping_validates_inputs(kwargs: dict[str, object], message: str) -> 
 
     with pytest.raises(ValueError, match=message):
         tool_ping_impl(client, **kwargs)
+
+
+def test_tool_traceroute_runs_on_isolated_client_and_returns_records() -> None:
+    client = Mock()
+    isolated_client = Mock()
+    isolated_client.run.return_value = [{"hop": "1", "host": "198.51.100.1", "status": "reachable"}]
+    client.isolated.return_value = isolated_client_mock(isolated_client)
+
+    result = tool_traceroute_impl(
+        client,
+        address="example.com",
+        count=2,
+        max_hops=20,
+        interval="1s",
+        interface="ether1",
+        packet_size=64,
+    )
+
+    assert result == [{"hop": "1", "host": "198.51.100.1", "status": "reachable"}]
+    isolated_client.run.assert_called_once_with(
+        "/tool/traceroute",
+        attrs={
+            "address": "example.com",
+            "count": 2,
+            "max-hops": 20,
+            "interval": "1s",
+            "interface": "ether1",
+            "size": 64,
+        },
+    )
+    client.isolated.assert_called_once_with()
+
+
+def test_tool_traceroute_returns_empty_list_when_router_only_returns_done() -> None:
+    client = Mock()
+    isolated_client = Mock()
+    isolated_client.run.return_value = {"ret": "ok"}
+    client.isolated.return_value = isolated_client_mock(isolated_client)
+
+    result = tool_traceroute_impl(client, address="example.com")
+
+    assert result == []
+
+
+def test_tool_traceroute_propagates_router_errors() -> None:
+    client = Mock()
+    isolated_client = Mock()
+    isolated_client.run.side_effect = RouterOSError("RouterOS command failed: no route to host")
+    client.isolated.return_value = isolated_client_mock(isolated_client)
+
+    with pytest.raises(RouterOSError, match="no route to host"):
+        tool_traceroute_impl(client, address="example.com")
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"address": "   "}, "address is required"),
+        ({"address": "example.com", "count": 0}, "count must be at least 1"),
+        ({"address": "example.com", "max_hops": 0}, "max_hops must be at least 1"),
+        ({"address": "example.com", "packet_size": 0}, "packet_size must be at least 1"),
+        ({"address": "example.com", "interval": "   "}, "interval is required"),
+    ],
+)
+def test_tool_traceroute_validates_inputs(kwargs: dict[str, object], message: str) -> None:
+    client = Mock()
+
+    with pytest.raises(ValueError, match=message):
+        tool_traceroute_impl(client, **kwargs)
+
+
+def test_dns_resolve_returns_normalized_result() -> None:
+    client = Mock()
+    isolated_client = Mock()
+    isolated_client.run.return_value = {"ret": "93.184.216.34"}
+    client.isolated.return_value = isolated_client_mock(isolated_client)
+
+    result = dns_resolve_impl(client, name="example.com", server="1.1.1.1")
+
+    assert result == {"name": "example.com", "address": "93.184.216.34", "server": "1.1.1.1"}
+    isolated_client.run.assert_called_once_with("/resolve", attrs={"domain-name": "example.com", "server": "1.1.1.1"})
+    client.isolated.assert_called_once_with()
+
+
+def test_dns_resolve_requires_name_and_server_when_provided() -> None:
+    client = Mock()
+
+    with pytest.raises(ValueError, match="name is required"):
+        dns_resolve_impl(client, name="   ")
+
+    with pytest.raises(ValueError, match="server is required"):
+        dns_resolve_impl(client, name="example.com", server="   ")
+
+
+def test_dns_resolve_requires_address_in_router_response() -> None:
+    client = Mock()
+    isolated_client = Mock()
+    isolated_client.run.return_value = {"ret": ""}
+    client.isolated.return_value = isolated_client_mock(isolated_client)
+
+    with pytest.raises(ValueError, match="did not return an address"):
+        dns_resolve_impl(client, name="example.com")
+
+
+def test_dns_resolve_propagates_router_errors() -> None:
+    client = Mock()
+    isolated_client = Mock()
+    isolated_client.run.side_effect = RouterOSError("RouterOS command failed: dns timeout")
+    client.isolated.return_value = isolated_client_mock(isolated_client)
+
+    with pytest.raises(RouterOSError, match="dns timeout"):
+        dns_resolve_impl(client, name="example.com")
+
+
+def test_interface_monitor_returns_first_record() -> None:
+    client = Mock()
+    isolated_client = Mock()
+    isolated_client.run.return_value = [
+        {"status": "running", "rx-bits-per-second": "1000000", "tx-bits-per-second": "250000"}
+    ]
+    client.isolated.return_value = isolated_client_mock(isolated_client)
+
+    result = interface_monitor_impl(client, name="ether1")
+
+    assert result == {"status": "running", "rx-bits-per-second": "1000000", "tx-bits-per-second": "250000"}
+    isolated_client.run.assert_called_once_with(
+        "/interface/monitor-traffic",
+        attrs={"interface": "ether1", "once": True},
+    )
+    client.isolated.assert_called_once_with()
+
+
+def test_interface_monitor_accepts_single_dict_result() -> None:
+    client = Mock()
+    isolated_client = Mock()
+    isolated_client.run.return_value = {"status": "running"}
+    client.isolated.return_value = isolated_client_mock(isolated_client)
+
+    result = interface_monitor_impl(client, name="ether1")
+
+    assert result == {"status": "running"}
+
+
+def test_interface_monitor_validates_name_and_requires_result() -> None:
+    client = Mock()
+
+    with pytest.raises(ValueError, match="name is required"):
+        interface_monitor_impl(client, name="   ")
+
+    isolated_client = Mock()
+    isolated_client.run.return_value = []
+    client.isolated.return_value = isolated_client_mock(isolated_client)
+
+    with pytest.raises(ValueError, match="No interface monitor result returned"):
+        interface_monitor_impl(client, name="ether1")
+
+
+def test_interface_monitor_propagates_router_errors() -> None:
+    client = Mock()
+    isolated_client = Mock()
+    isolated_client.run.side_effect = RouterOSError("RouterOS command failed: interface busy")
+    client.isolated.return_value = isolated_client_mock(isolated_client)
+
+    with pytest.raises(RouterOSError, match="interface busy"):
+        interface_monitor_impl(client, name="ether1")
 
 
 def test_system_resource_get_returns_single_record() -> None:

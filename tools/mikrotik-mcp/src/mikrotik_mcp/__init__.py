@@ -4,8 +4,10 @@ from .server import (
     command_cancel_impl,
     command_run_impl,
     create_app,
+    dns_resolve_impl,
     file_download_impl,
     file_list_impl,
+    interface_monitor_impl,
     resource_add_impl,
     resource_listen_impl,
     resource_print_impl,
@@ -15,6 +17,7 @@ from .server import (
     system_backup_save_impl,
     system_export_impl,
     tool_ping_impl,
+    tool_traceroute_impl,
 )
 
 __all__ = [
@@ -25,8 +28,10 @@ __all__ = [
     "command_cancel_impl",
     "command_run_impl",
     "create_app",
+    "dns_resolve_impl",
     "file_download_impl",
     "file_list_impl",
+    "interface_monitor_impl",
     "load_file_transfer_settings",
     "resource_add_impl",
     "resource_listen_impl",
@@ -37,4 +42,5 @@ __all__ = [
     "system_backup_save_impl",
     "system_export_impl",
     "tool_ping_impl",
+    "tool_traceroute_impl",
 ]

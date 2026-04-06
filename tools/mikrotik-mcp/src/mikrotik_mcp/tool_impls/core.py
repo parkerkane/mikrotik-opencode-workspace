@@ -146,6 +146,91 @@ def tool_ping_impl(
     return []
 
 
+def tool_traceroute_impl(
+    client: RouterOSClient,
+    *,
+    address: str,
+    count: int = 3,
+    max_hops: int = 30,
+    interval: str | None = None,
+    interface: str | None = None,
+    packet_size: int | None = None,
+) -> list[dict[str, str]]:
+    normalized_address = normalize_required_string(address, field_name="address")
+    if count < 1:
+        raise ValueError("count must be at least 1")
+    if max_hops < 1:
+        raise ValueError("max_hops must be at least 1")
+
+    attributes: dict[str, Any] = {
+        "address": normalized_address,
+        "count": count,
+        "max-hops": max_hops,
+    }
+    if interval is not None:
+        attributes["interval"] = normalize_required_string(interval, field_name="interval")
+    if interface is not None:
+        attributes["interface"] = normalize_required_string(interface, field_name="interface")
+    if packet_size is not None:
+        if packet_size < 1:
+            raise ValueError("packet_size must be at least 1")
+        attributes["size"] = packet_size
+
+    with client.isolated() as isolated_client:
+        result = isolated_client.run("/tool/traceroute", attrs=attributes)
+
+    if isinstance(result, list):
+        return result
+    return []
+
+
+def dns_resolve_impl(
+    client: RouterOSClient,
+    *,
+    name: str,
+    server: str | None = None,
+) -> dict[str, str]:
+    normalized_name = normalize_required_string(name, field_name="name")
+
+    attributes: dict[str, Any] = {"domain-name": normalized_name}
+    if server is not None:
+        attributes["server"] = normalize_required_string(server, field_name="server")
+
+    with client.isolated() as isolated_client:
+        result = isolated_client.run("/resolve", attrs=attributes)
+
+    if not isinstance(result, dict):
+        raise ValueError("RouterOS resolve command did not return a single result")
+
+    address = result.get("ret") or result.get("address")
+    if not address:
+        raise ValueError("RouterOS resolve command did not return an address")
+
+    resolved = {"name": normalized_name, "address": address}
+    if server is not None:
+        resolved["server"] = attributes["server"]
+    return resolved
+
+
+def interface_monitor_impl(
+    client: RouterOSClient,
+    *,
+    name: str,
+) -> dict[str, str]:
+    normalized_name = normalize_required_string(name, field_name="name")
+
+    with client.isolated() as isolated_client:
+        result = isolated_client.run("/interface/monitor-traffic", attrs={"interface": normalized_name, "once": True})
+
+    if isinstance(result, list):
+        if not result:
+            raise ValueError("No interface monitor result returned")
+        return result[0]
+    if isinstance(result, dict) and result:
+        return result
+    raise ValueError("No interface monitor result returned")
+
+
 def system_resource_get_impl(client: RouterOSClient) -> dict[str, str]:
     return print_single_record(client, menu="/system/resource", entity_name="system resource")
 

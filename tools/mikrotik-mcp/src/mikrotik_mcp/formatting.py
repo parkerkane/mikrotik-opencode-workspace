@@ -49,6 +49,26 @@ def format_interface_get_result(record: dict[str, Any]) -> CallToolResult:
     )
 
 
+def format_interface_monitor_result(name: str, record: dict[str, Any]) -> CallToolResult:
+    rx_rate = _display_value(record.get("rx-bits-per-second"))
+    tx_rate = _display_value(record.get("tx-bits-per-second"))
+    return format_singleton_result(
+        "Interface Monitor",
+        f"Interface monitor {name}: rx {rx_rate}, tx {tx_rate}",
+        {"name": name, **record},
+        preferred_fields=(
+            "name",
+            "status",
+            "rx-bits-per-second",
+            "tx-bits-per-second",
+            "rx-packets-per-second",
+            "tx-packets-per-second",
+            "rx-byte",
+            "tx-byte",
+        ),
+    )
+
+
 def format_ip_address_get_result(record: dict[str, Any]) -> CallToolResult:
     address = _display_value(record.get("address"))
     return format_singleton_result(
@@ -115,6 +135,76 @@ def format_dns_get_result(record: dict[str, Any]) -> CallToolResult:
         f"DNS settings: servers {servers}, remote requests {remote_requests}",
         record,
         preferred_fields=("servers", "allow-remote-requests", "cache-size", "dynamic-servers", "use-doh-server"),
+    )
+
+
+def format_dns_resolve_result(record: dict[str, Any]) -> CallToolResult:
+    name = _display_value(record.get("name"))
+    address = _display_value(record.get("address"))
+    return format_singleton_result(
+        "DNS Resolve",
+        f"DNS resolve: {name} -> {address}",
+        record,
+        preferred_fields=("name", "address", "server"),
+    )
+
+
+def format_tool_ping_result(address: str, items: list[dict[str, Any]]) -> CallToolResult:
+    return CallToolResult(
+        content=[
+            TextContent(
+                type="text",
+                text="\n".join(
+                    [
+                        f"Ping {address}: {len(items)} probe{'' if len(items) == 1 else 's'}",
+                        "",
+                        *_render_table(
+                            items,
+                            columns=(
+                                ("seq", "Seq"),
+                                ("host", "Host"),
+                                ("size", "Size"),
+                                ("ttl", "TTL"),
+                                ("time", "Time"),
+                                ("status", "Status"),
+                            ),
+                        ),
+                    ]
+                ),
+            )
+        ],
+        structuredContent={"address": address, "result": items},
+    )
+
+
+def format_tool_traceroute_result(address: str, items: list[dict[str, Any]]) -> CallToolResult:
+    return CallToolResult(
+        content=[
+            TextContent(
+                type="text",
+                text="\n".join(
+                    [
+                        f"Traceroute {address}: {len(items)} hop{'' if len(items) == 1 else 's'}",
+                        "",
+                        *_render_table(
+                            items,
+                            columns=(
+                                ("hop", "Hop"),
+                                ("host", "Host"),
+                                ("address", "Address"),
+                                ("loss", "Loss"),
+                                ("last", "Last"),
+                                ("avg", "Avg"),
+                                ("best", "Best"),
+                                ("worst", "Worst"),
+                                ("status", "Status"),
+                            ),
+                        ),
+                    ]
+                ),
+            )
+        ],
+        structuredContent={"address": address, "result": items},
     )
 
 

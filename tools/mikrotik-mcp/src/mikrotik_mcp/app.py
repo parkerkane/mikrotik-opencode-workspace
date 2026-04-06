@@ -9,10 +9,12 @@ from .client import RouterOSClient
 from .formatting import (
     format_dhcp_lease_list_result,
     format_dhcp_network_list_result,
+    format_dns_resolve_result,
     format_dhcp_server_list_result,
     format_dns_get_result,
     format_interface_get_result,
     format_interface_list_result,
+    format_interface_monitor_result,
     format_ip_address_get_result,
     format_ip_address_list_result,
     format_ip_route_get_result,
@@ -20,6 +22,8 @@ from .formatting import (
     format_system_clock_result,
     format_system_identity_result,
     format_system_resource_result,
+    format_tool_ping_result,
+    format_tool_traceroute_result,
 )
 from .tool_impls import access, core, files, layer2, security
 
@@ -104,15 +108,53 @@ def _register_core_tools(app: FastMCP, client: RouterOSClient) -> None:
         interval: str | None = None,
         interface: str | None = None,
         packet_size: int | None = None,
-    ) -> list[dict[str, str]]:
-        return core.tool_ping_impl(
-            client,
-            address=address,
-            count=count,
-            interval=interval,
-            interface=interface,
-            packet_size=packet_size,
+    ) -> Annotated[CallToolResult, list[dict[str, str]]]:
+        return format_tool_ping_result(
+            address,
+            core.tool_ping_impl(
+                client,
+                address=address,
+                count=count,
+                interval=interval,
+                interface=interface,
+                packet_size=packet_size,
+            ),
         )
+
+    @app.tool(description="Run a bounded traceroute from the router and return hop results.")
+    def tool_traceroute(
+        address: str,
+        count: int = 3,
+        max_hops: int = 30,
+        interval: str | None = None,
+        interface: str | None = None,
+        packet_size: int | None = None,
+    ) -> Annotated[CallToolResult, list[dict[str, str]]]:
+        return format_tool_traceroute_result(
+            address,
+            core.tool_traceroute_impl(
+                client,
+                address=address,
+                count=count,
+                max_hops=max_hops,
+                interval=interval,
+                interface=interface,
+                packet_size=packet_size,
+            ),
+        )
+
+    @app.tool(description="Resolve a DNS name from the router, optionally using a specific DNS server.")
+    def dns_resolve(
+        name: str,
+        server: str | None = None,
+    ) -> Annotated[CallToolResult, dict[str, str]]:
+        return format_dns_resolve_result(core.dns_resolve_impl(client, name=name, server=server))
+
+    @app.tool(description="Run a one-shot interface traffic monitor and return current counters and rates.")
+    def interface_monitor(
+        name: str,
+    ) -> Annotated[CallToolResult, dict[str, str]]:
+        return format_interface_monitor_result(name, core.interface_monitor_impl(client, name=name))
 
     @app.tool(description="Get RouterOS system resource details.")
     def system_resource_get() -> Annotated[CallToolResult, dict[str, str]]:

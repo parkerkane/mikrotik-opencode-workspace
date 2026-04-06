@@ -199,18 +199,20 @@ Why separate:
 
 ## Phase 8: Operational Command Wrappers
 
+Status: done.
+
 Deliverables:
 
 - dedicated wrappers for high-value operational commands such as ping, traceroute, and selected diagnostics
 - narrower input schemas than generic `command_run`
 - stable output shapes for common command results
 
-What needs to be done:
+What was done:
 
-- identify which operational commands are common enough to deserve first-class tools
-- define friendly tool names and constrained parameters for those commands
-- normalize the most useful result fields for each command family
-- add mocked tests for success, timeout, and RouterOS error cases
+- keep `tool_ping` as the bounded per-probe wrapper and align it with the formatted operational output style
+- add a dedicated `tool_traceroute` wrapper with constrained parameters and normalized hop results
+- add a dedicated `dns_resolve` wrapper that normalizes RouterOS resolve replies into a stable single-record shape
+- add mocked tests for success, empty responses, validation failures, and RouterOS error cases across the new wrappers
 
 Why separate:
 
@@ -229,7 +231,6 @@ These apply in every phase:
 
 ## Recommended Immediate Next Steps
 
-1. Add dedicated wrappers for additional high-value commands such as traceroute and selected diagnostics.
-2. Define friendly tool names and constrained parameters for those command families.
-3. Normalize the most useful result fields for each operational command wrapper.
-4. Add mocked tests for success, timeout, and RouterOS error cases.
+1. Add additional operational wrappers only where there is clear user demand, such as interface monitoring or selected live diagnostics.
+2. Keep new command wrappers narrowly scoped with stable output shapes and mocked tests.
+3. Continue improving presentation templates where operational command outputs benefit from clearer Markdown summaries or tables.
