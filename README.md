@@ -112,7 +112,7 @@ Fully isolated mode:
 Both wrappers:
 - mount this repo at `/workspace`
 - start from `/workspace` so project `opencode.json` is discovered automatically
-- run with `--cap-drop=ALL`, `--security-opt no-new-privileges:true`, and a read-only container filesystem
+- run with `--cap-drop=ALL` and `--security-opt no-new-privileges:true`
 - disable Git credential prompting so authenticated `git push` stays a host-side action unless you explicitly add Git credentials to the container
 
 Pass a custom command instead of the default `opencode /workspace` if needed:

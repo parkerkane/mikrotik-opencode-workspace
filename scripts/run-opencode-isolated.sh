@@ -34,7 +34,6 @@ done
 exec docker run --rm --init "${DOCKER_TTY_ARGS[@]}" \
     --workdir /workspace \
     --user 1000:1000 \
-    --read-only \
     --cap-drop=ALL \
     --security-opt no-new-privileges:true \
     --tmpfs /tmp:rw,exec,nosuid,nodev \
