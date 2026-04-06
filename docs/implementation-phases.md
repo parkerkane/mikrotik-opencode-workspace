@@ -139,17 +139,28 @@ Why later:
 
 ## Phase 6: Streaming + Long-Running Commands
 
+Status: done.
+
 Deliverables:
 
 - `resource_listen`
 - `command_cancel`
 - selected monitor or diagnostics tools where MCP UX makes sense
 
-What needs to be done:
+What was done:
 
-- design tagged command handling
-- define how streaming data is exposed in MCP without creating a poor UX
-- test cancellation and interrupted command handling
+- implement bounded tagged `listen` support with automatic cancellation after `max_events`
+- isolate bounded long-running operations onto short-lived cloned RouterOS connections so they do not interfere with the shared MCP session socket
+- keep `command_cancel` available as the low-level cancel primitive while deferring true cross-call session management
+- add a first dedicated diagnostics wrapper with `tool_ping`
+- add tests for generated tags, cancellation, cancel fatal handling, and isolated client lifecycle
+
+Definition of done:
+
+- `resource_listen` returns a bounded event batch with stable metadata fields
+- tagged long-running operations do not reuse the shared always-open MCP socket
+- `tool_ping` is available as a safe bounded diagnostics wrapper
+- mocked pytest coverage passes locally
 
 Why last:
 

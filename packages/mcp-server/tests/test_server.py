@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import MagicMock, Mock
 
 import pytest
 
@@ -61,6 +61,7 @@ from mikrotik_mcp.server import (
     system_export_impl,
     system_identity_get_impl,
     system_resource_get_impl,
+    tool_ping_impl,
     vlan_add_impl,
     vlan_list_impl,
     vlan_remove_impl,
@@ -87,6 +88,13 @@ class RecordingDownloader:
             raise RouterFileDownloadError("download failed")
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(b"artifact")
+
+
+def isolated_client_mock(inner_client: Mock) -> MagicMock:
+    isolated = MagicMock()
+    isolated.__enter__.return_value = inner_client
+    isolated.__exit__.return_value = None
+    return isolated
 
 
 def test_resource_print_calls_client_and_returns_normalized_items() -> None:
@@ -187,7 +195,8 @@ def test_command_run_calls_client_and_returns_normalized_output() -> None:
 
 def test_resource_listen_calls_client_and_returns_bounded_payload() -> None:
     client = Mock()
-    client.listen.return_value = ListenResult(
+    isolated_client = Mock()
+    isolated_client.listen.return_value = ListenResult(
         tag="listen-1",
         records=[{"name": "ether1"}],
         done={"ret": "ok"},
@@ -195,6 +204,7 @@ def test_resource_listen_calls_client_and_returns_bounded_payload() -> None:
         limit_reached=True,
         cancel_done={"ret": "interrupted"},
     )
+    client.isolated.return_value = isolated_client_mock(isolated_client)
 
     result = resource_listen_impl(
         client,
@@ -216,7 +226,7 @@ def test_resource_listen_calls_client_and_returns_bounded_payload() -> None:
         "limit_reached": True,
         "cancel_done": {"ret": "interrupted"},
     }
-    client.listen.assert_called_once_with(
+    isolated_client.listen.assert_called_once_with(
         "/interface",
         proplist=["name"],
         queries=["running=true"],
@@ -224,6 +234,7 @@ def test_resource_listen_calls_client_and_returns_bounded_payload() -> None:
         tag="listen-1",
         max_events=1,
     )
+    client.isolated.assert_called_once_with()
 
 
 def test_command_cancel_calls_client_and_returns_requested_tag() -> None:
@@ -234,6 +245,62 @@ def test_command_cancel_calls_client_and_returns_requested_tag() -> None:
 
     assert result == {"tag": "listen-1", "success": True}
     client.cancel.assert_called_once_with("listen-1")
+
+
+def test_tool_ping_runs_on_isolated_client_and_returns_records() -> None:
+    client = Mock()
+    isolated_client = Mock()
+    isolated_client.run.return_value = [{"host": "192.0.2.1", "status": "reachable"}]
+    client.isolated.return_value = isolated_client_mock(isolated_client)
+
+    result = tool_ping_impl(
+        client,
+        address="192.0.2.1",
+        count=3,
+        interval="500ms",
+        interface="ether1",
+        packet_size=64,
+    )
+
+    assert result == [{"host": "192.0.2.1", "status": "reachable"}]
+    isolated_client.run.assert_called_once_with(
+        "/tool/ping",
+        attrs={
+            "address": "192.0.2.1",
+            "count": 3,
+            "interval": "500ms",
+            "interface": "ether1",
+            "size": 64,
+        },
+    )
+    client.isolated.assert_called_once_with()
+
+
+def test_tool_ping_returns_empty_list_when_router_only_returns_done() -> None:
+    client = Mock()
+    isolated_client = Mock()
+    isolated_client.run.return_value = {"ret": "ok"}
+    client.isolated.return_value = isolated_client_mock(isolated_client)
+
+    result = tool_ping_impl(client, address="192.0.2.1")
+
+    assert result == []
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"address": "   "}, "address is required"),
+        ({"address": "192.0.2.1", "count": 0}, "count must be at least 1"),
+        ({"address": "192.0.2.1", "packet_size": 0}, "packet_size must be at least 1"),
+        ({"address": "192.0.2.1", "interval": "   "}, "interval is required"),
+    ],
+)
+def test_tool_ping_validates_inputs(kwargs: dict[str, object], message: str) -> None:
+    client = Mock()
+
+    with pytest.raises(ValueError, match=message):
+        tool_ping_impl(client, **kwargs)
 
 
 def test_system_resource_get_returns_single_record() -> None:

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from io import BytesIO
+from unittest.mock import Mock
 
 import pytest
 
-from mikrotik_mcp.client import RouterOSClient, RouterOSError, encode_length, decode_length, parse_reply_sentences
+from mikrotik_mcp.client import RouterOSClient, RouterOSFatalError, RouterOSError, encode_length, decode_length, parse_reply_sentences
 
 
 @pytest.mark.parametrize(
@@ -223,6 +224,41 @@ def test_listen_requires_positive_max_events(client: RouterOSClient) -> None:
         client.listen("/interface", max_events=0)
 
 
+def test_listen_generates_tag_when_not_provided(client: RouterOSClient, fake_socket) -> None:
+    fake_socket.response_bytes.extend(client.encode_sentence(["!re", "=.tag=listen-generated", "=name=ether1"]))
+    fake_socket.response_bytes.extend(client.encode_sentence(["!done", "=.tag=listen-generated-cancel", "=ret=interrupted"]))
+    fake_socket.response_bytes.extend(client.encode_sentence(["!done", "=.tag=listen-generated"]))
+    client._socket = fake_socket
+    client._generate_tag = Mock(return_value="listen-generated")
+
+    result = client.listen("/interface", max_events=1)
+
+    assert result.tag == "listen-generated"
+    assert result.cancel_done == {".tag": "listen-generated-cancel", "ret": "interrupted"}
+    assert bytes(fake_socket.sent) == client.encode_sentence(
+        [
+            "/interface/listen",
+            "=.tag=listen-generated",
+        ]
+    ) + client.encode_sentence(
+        [
+            "/cancel",
+            "=tag=listen-generated",
+            "=.tag=listen-generated-cancel",
+        ]
+    )
+
+
+def test_listen_raises_when_cancel_returns_fatal(client: RouterOSClient, fake_socket) -> None:
+    fake_socket.response_bytes.extend(client.encode_sentence(["!re", "=.tag=listen-1", "=name=ether1"]))
+    fake_socket.response_bytes.extend(client.encode_sentence(["!fatal", "=.tag=listen-1-cancel", "=message=connection closing"]))
+    fake_socket.response_bytes.extend(client.encode_sentence(["!done", "=.tag=listen-1"]))
+    client._socket = fake_socket
+
+    with pytest.raises(RouterOSFatalError, match="connection closing"):
+        client.listen("/interface", tag="listen-1", max_events=1)
+
+
 def test_cancel_builds_cancel_sentence(client: RouterOSClient, fake_socket) -> None:
     fake_socket.response_bytes.extend(client.encode_sentence(["!done", "=ret=ok"]))
     client._socket = fake_socket
@@ -236,6 +272,31 @@ def test_cancel_builds_cancel_sentence(client: RouterOSClient, fake_socket) -> N
             "=tag=listen-1",
         ]
     )
+
+
+def test_clone_copies_connection_settings(client: RouterOSClient) -> None:
+    cloned = client.clone()
+
+    assert cloned is not client
+    assert cloned.host == client.host
+    assert cloned.username == client.username
+    assert cloned.password == client.password
+    assert cloned.port == client.port
+    assert cloned.use_ssl == client.use_ssl
+    assert cloned.tls_verify == client.tls_verify
+    assert cloned.timeout == client.timeout
+
+
+def test_isolated_opens_and_closes_cloned_client(client: RouterOSClient) -> None:
+    cloned = Mock(spec=RouterOSClient)
+    client.clone = Mock(return_value=cloned)
+
+    with client.isolated() as isolated_client:
+        assert isolated_client is cloned
+
+    client.clone.assert_called_once_with()
+    cloned.open.assert_called_once_with()
+    cloned.close.assert_called_once_with()
 
 
 def test_read_word_falls_back_to_latin1_for_non_utf8_router_data(client: RouterOSClient, fake_socket) -> None:

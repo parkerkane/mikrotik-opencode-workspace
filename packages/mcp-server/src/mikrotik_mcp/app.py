@@ -81,6 +81,23 @@ def _register_core_tools(app: FastMCP, client: RouterOSClient) -> None:
     def command_cancel(tag: str) -> dict[str, str] | dict[str, bool]:
         return core.command_cancel_impl(client, tag=tag)
 
+    @app.tool(description="Run a bounded ping from the router and return per-probe results.")
+    def tool_ping(
+        address: str,
+        count: int = 4,
+        interval: str | None = None,
+        interface: str | None = None,
+        packet_size: int | None = None,
+    ) -> list[dict[str, str]]:
+        return core.tool_ping_impl(
+            client,
+            address=address,
+            count=count,
+            interval=interval,
+            interface=interface,
+            packet_size=packet_size,
+        )
+
     @app.tool(description="Get RouterOS system resource details.")
     def system_resource_get() -> dict[str, str]:
         return core.system_resource_get_impl(client)

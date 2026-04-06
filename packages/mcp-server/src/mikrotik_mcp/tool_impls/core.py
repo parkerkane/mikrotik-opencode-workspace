@@ -81,14 +81,15 @@ def resource_listen_impl(
     tag: str | None = None,
     max_events: int = 10,
 ) -> dict[str, Any]:
-    result = client.listen(
-        menu,
-        proplist=list(proplist) if proplist is not None else None,
-        queries=list(queries) if queries is not None else None,
-        attrs=attributes,
-        tag=tag,
-        max_events=max_events,
-    )
+    with client.isolated() as isolated_client:
+        result = isolated_client.listen(
+            menu,
+            proplist=list(proplist) if proplist is not None else None,
+            queries=list(queries) if queries is not None else None,
+            attrs=attributes,
+            tag=tag,
+            max_events=max_events,
+        )
     return {
         "tag": result.tag,
         "events": result.records,
@@ -109,6 +110,40 @@ def command_cancel_impl(
     normalized_tag = normalize_required_string(tag, field_name="tag")
     result = client.cancel(normalized_tag)
     return {"tag": normalized_tag, **result}
+
+
+def tool_ping_impl(
+    client: RouterOSClient,
+    *,
+    address: str,
+    count: int = 4,
+    interval: str | None = None,
+    interface: str | None = None,
+    packet_size: int | None = None,
+) -> list[dict[str, str]]:
+    normalized_address = normalize_required_string(address, field_name="address")
+    if count < 1:
+        raise ValueError("count must be at least 1")
+
+    attributes: dict[str, Any] = {
+        "address": normalized_address,
+        "count": count,
+    }
+    if interval is not None:
+        attributes["interval"] = normalize_required_string(interval, field_name="interval")
+    if interface is not None:
+        attributes["interface"] = normalize_required_string(interface, field_name="interface")
+    if packet_size is not None:
+        if packet_size < 1:
+            raise ValueError("packet_size must be at least 1")
+        attributes["size"] = packet_size
+
+    with client.isolated() as isolated_client:
+        result = isolated_client.run("/tool/ping", attrs=attributes)
+
+    if isinstance(result, list):
+        return result
+    return []
 
 
 def system_resource_get_impl(client: RouterOSClient) -> dict[str, str]:

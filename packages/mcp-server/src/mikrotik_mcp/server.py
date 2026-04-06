@@ -33,6 +33,7 @@ from .tool_impls.core import (
     system_clock_get_impl,
     system_identity_get_impl,
     system_resource_get_impl,
+    tool_ping_impl,
 )
 from .tool_impls.files import file_download_impl, file_list_impl, system_backup_collect_impl, system_backup_save_impl, system_export_impl
 from .tool_impls.layer2 import (
@@ -119,6 +120,7 @@ __all__ = [
     "system_export_impl",
     "system_identity_get_impl",
     "system_resource_get_impl",
+    "tool_ping_impl",
     "vlan_add_impl",
     "vlan_list_impl",
     "vlan_remove_impl",

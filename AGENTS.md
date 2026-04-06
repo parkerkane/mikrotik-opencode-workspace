@@ -41,4 +41,4 @@
 - Keep `jq_filter` behavior tool-side: `resource_print` applies it after RouterOS replies are normalized to JSON-like Python data.
 
 ## Near-Term Direction
-- If continuing feature work, Phase 6 is next: streaming and long-running command support.
+- If continuing feature work, Phase 7 is next: response formatting tightening.

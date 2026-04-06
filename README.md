@@ -90,6 +90,9 @@ Current phases expose these MCP tools:
 - `resource_set`: generic RouterOS `/<menu>/set` with explicit `item_id`
 - `resource_remove`: generic RouterOS `/<menu>/remove` with explicit `item_id`
 - `command_run`: generic RouterOS command runner
+- `resource_listen`: bounded listen helper for menus that support `listen`
+- `command_cancel`: low-level cancel helper for tagged API commands
+- `tool_ping`: bounded ping helper that returns per-probe results
 - `system_resource_get`: get RouterOS system resource details
 - `system_identity_get`: get RouterOS system identity
 - `system_clock_get`: get RouterOS system clock settings
@@ -145,12 +148,14 @@ Current phases expose these MCP tools:
 
 `jq_filter` is applied only after RouterOS replies have been normalized into Python JSON-like data.
 
+`resource_listen` and `tool_ping` run on short-lived cloned RouterOS connections so bounded long-running operations do not interfere with the MCP server's shared session socket. `command_cancel` is available as a low-level primitive, but true cross-call session cancellation is not implemented yet.
+
 ## Next
 
-Phase 6 is next:
+Phase 7 is next:
 
-- streaming and long-running command support
-- tagged command handling and cancellation
-- selected monitor and diagnostics tools where MCP UX makes sense
+- response formatting tightening
+- explicit Markdown/table presentation for common operational outputs
+- stable rendering rules for empty values and boolean-like fields
 
 See `docs/implementation-phases.md` for the full roadmap.

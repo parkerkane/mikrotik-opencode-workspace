@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 import socket
 import ssl
@@ -187,6 +189,26 @@ class RouterOSClient:
     def open(self) -> None:
         self.connect()
         self.login()
+
+    def clone(self) -> RouterOSClient:
+        return RouterOSClient(
+            self.host,
+            self.username,
+            self.password,
+            port=self.port,
+            use_ssl=self.use_ssl,
+            tls_verify=self.tls_verify,
+            timeout=self.timeout,
+        )
+
+    @contextmanager
+    def isolated(self) -> Iterator[RouterOSClient]:
+        isolated_client = self.clone()
+        isolated_client.open()
+        try:
+            yield isolated_client
+        finally:
+            isolated_client.close()
 
     def login(self) -> None:
         reply = self.command("/login", attrs={"name": self.username, "password": self.password})

@@ -14,6 +14,7 @@ from .server import (
     system_backup_collect_impl,
     system_backup_save_impl,
     system_export_impl,
+    tool_ping_impl,
 )
 
 __all__ = [
@@ -35,4 +36,5 @@ __all__ = [
     "system_backup_collect_impl",
     "system_backup_save_impl",
     "system_export_impl",
+    "tool_ping_impl",
 ]
