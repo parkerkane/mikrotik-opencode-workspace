@@ -29,6 +29,11 @@
 - Default local backup destination for that shortcut should be workspace-root `backups/`.
 - Default local destination for downloaded router files should be workspace-root `exports/`, except backup artifacts which should continue to use `backups/`.
 
+## RouterOS Notes
+- `www-ssl` requires an explicit certificate binding; a valid certificate in the store is not enough for browser HTTPS until `/ip/service www-ssl` points at it.
+- Dynamic `/ip/service` entries with `connection=true` are active client sessions, not separately configurable services.
+- RouterOS may reject signing a second certificate with the same subject/SAN set while another matching certificate already exists; renaming the active certificate is often the minimal safe fix.
+
 ## Response Formatting
 - Default to human-friendly Markdown when presenting router data.
 - Use Markdown tables for tabular RouterOS results like users, interfaces, addresses, and routes.
