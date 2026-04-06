@@ -27,6 +27,7 @@
 ## Operational Shortcuts
 - If the user asks to "create backup" or "create and download backup", treat that as `system_backup_collect` with `name_prefix="backup"` unless the user specifies a different prefix.
 - Default local backup destination for that shortcut should be workspace-root `backups/`.
+- Default local destination for downloaded router files should be workspace-root `exports/`, except backup artifacts which should continue to use `backups/`.
 
 ## Response Formatting
 - Default to human-friendly Markdown when presenting router data.
