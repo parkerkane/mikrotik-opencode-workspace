@@ -80,23 +80,38 @@ Testing notes:
 
 ## Tool Surface
 
-Phase 2 exposes these MCP tools:
+Current phases expose these MCP tools:
 
 - `resource_print`: generic RouterOS `/<menu>/print` access with optional `.proplist`, query words, extra attributes, and optional `jq_filter`
 - `resource_add`: generic RouterOS `/<menu>/add`
 - `resource_set`: generic RouterOS `/<menu>/set` with explicit `item_id`
 - `resource_remove`: generic RouterOS `/<menu>/remove` with explicit `item_id`
 - `command_run`: generic RouterOS command runner
+- `system_resource_get`: get RouterOS system resource details
+- `system_identity_get`: get RouterOS system identity
+- `system_clock_get`: get RouterOS system clock settings
+- `interface_list`: list interfaces with optional running and disabled filters
+- `interface_get`: get one interface by `name` or `item_id`
+- `ip_address_list`: list IP addresses with optional interface and disabled filters
+- `ip_address_get`: get one IP address by `address` or `item_id`
+- `ip_route_list`: list IP routes with optional destination and disabled filters
+- `ip_route_get`: get one IP route by `dst_address` or `item_id`
+- `dhcp_lease_list`: list DHCP leases with optional address, MAC, and active filters
+- `dhcp_server_list`: list configured DHCP servers
+- `dhcp_network_list`: list configured DHCP networks
+- `dns_get`: get RouterOS DNS settings
+- `dns_set`: update RouterOS DNS settings
 
 `jq_filter` is applied only after RouterOS replies have been normalized into Python JSON-like data.
 
 ## Next
 
-Phase 2 is next:
+Phase 4 is next:
 
-- `resource_add`
-- `resource_set`
-- `resource_remove`
-- `command_run`
+- file listing helper
+- file download helper
+- `system_backup_save`
+- `system_export`
+- `system_backup_collect`
 
 See `docs/implementation-phases.md` for the full roadmap.

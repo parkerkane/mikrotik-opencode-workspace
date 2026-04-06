@@ -2,7 +2,7 @@
 
 ## Scope
 - The only active code package is `packages/mcp-server/`. There is no root build/test manifest.
-- Current implementation scope is Phase 1 only: RouterOS transport/client, stdio MCP bootstrap, and the generic `resource_print` tool. Roadmap source: `docs/implementation-phases.md`.
+- Current implementation scope is through Phase 3: generic read/mutation tools plus core operational read tools and DNS set support. Roadmap source: `docs/implementation-phases.md`.
 
 ## Working Directory
 - Run Python install and test commands from `packages/mcp-server/`, not the repo root.
@@ -37,4 +37,4 @@
 - Keep `jq_filter` behavior tool-side: `resource_print` applies it after RouterOS replies are normalized to JSON-like Python data.
 
 ## Near-Term Direction
-- If continuing feature work, Phase 2 is next: `resource_add`, `resource_set`, `resource_remove`, and `command_run`.
+- If continuing feature work, Phase 4 is next: file handling, backups, exports, and backup collection workflow.

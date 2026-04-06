@@ -13,6 +13,56 @@ from .client import RouterOSClient
 from .filters import apply_jq_filter
 
 
+def _stringify_value(value: Any) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return str(value)
+
+
+def _print_records(
+    client: RouterOSClient,
+    *,
+    menu: str,
+    proplist: Sequence[str] | None = None,
+    queries: Sequence[str] | None = None,
+    attributes: dict[str, Any] | None = None,
+) -> list[dict[str, str]]:
+    return client.print(
+        menu,
+        proplist=list(proplist) if proplist is not None else None,
+        queries=list(queries) if queries is not None else None,
+        attrs=attributes,
+    )
+
+
+def _print_single_record(
+    client: RouterOSClient,
+    *,
+    menu: str,
+    queries: Sequence[str] | None = None,
+    attributes: dict[str, Any] | None = None,
+    entity_name: str,
+) -> dict[str, str]:
+    items = _print_records(client, menu=menu, queries=queries, attributes=attributes)
+    if not items:
+        raise ValueError(f"No matching {entity_name} found")
+    if len(items) > 1:
+        raise ValueError(f"Multiple {entity_name} records matched")
+    return items[0]
+
+
+def _build_equality_queries(**filters: Any) -> list[str]:
+    return [f"{field}={_stringify_value(value)}" for field, value in filters.items() if value is not None]
+
+
+def _require_exactly_one_locator(entity_name: str, **locators: str | None) -> tuple[str, str]:
+    selected = [(field, value.strip()) for field, value in locators.items() if value is not None and value.strip()]
+    if len(selected) != 1:
+        options = ", ".join(locators)
+        raise ValueError(f"Exactly one {entity_name} locator is required: {options}")
+    return selected[0]
+
+
 def resource_print_impl(
     client: RouterOSClient,
     *,
@@ -22,12 +72,7 @@ def resource_print_impl(
     attributes: dict[str, Any] | None = None,
     jq_filter: str | None = None,
 ) -> Any:
-    items = client.print(
-        menu,
-        proplist=list(proplist) if proplist is not None else None,
-        queries=list(queries) if queries is not None else None,
-        attrs=attributes,
-    )
+    items = _print_records(client, menu=menu, proplist=proplist, queries=queries, attributes=attributes)
     if jq_filter:
         return apply_jq_filter(items, jq_filter)
     return items
@@ -73,6 +118,132 @@ def command_run_impl(
         attrs=attributes,
         queries=list(queries) if queries is not None else None,
     )
+
+
+def system_resource_get_impl(client: RouterOSClient) -> dict[str, str]:
+    return _print_single_record(client, menu="/system/resource", entity_name="system resource")
+
+
+def system_identity_get_impl(client: RouterOSClient) -> dict[str, str]:
+    return _print_single_record(client, menu="/system/identity", entity_name="system identity")
+
+
+def system_clock_get_impl(client: RouterOSClient) -> dict[str, str]:
+    return _print_single_record(client, menu="/system/clock", entity_name="system clock")
+
+
+def interface_list_impl(
+    client: RouterOSClient,
+    *,
+    running_only: bool = False,
+    disabled: bool | None = None,
+) -> list[dict[str, str]]:
+    queries = _build_equality_queries(disabled=disabled)
+    if running_only:
+        queries.append("running=true")
+    return _print_records(client, menu="/interface", queries=queries or None)
+
+
+def interface_get_impl(
+    client: RouterOSClient,
+    *,
+    name: str | None = None,
+    item_id: str | None = None,
+) -> dict[str, str]:
+    field, value = _require_exactly_one_locator("interface", name=name, item_id=item_id)
+    query_field = ".id" if field == "item_id" else "name"
+    return _print_single_record(client, menu="/interface", queries=[f"{query_field}={value}"], entity_name="interface")
+
+
+def ip_address_list_impl(
+    client: RouterOSClient,
+    *,
+    interface: str | None = None,
+    disabled: bool | None = None,
+) -> list[dict[str, str]]:
+    queries = _build_equality_queries(interface=interface, disabled=disabled)
+    return _print_records(client, menu="/ip/address", queries=queries or None)
+
+
+def ip_address_get_impl(
+    client: RouterOSClient,
+    *,
+    address: str | None = None,
+    item_id: str | None = None,
+) -> dict[str, str]:
+    field, value = _require_exactly_one_locator("IP address", address=address, item_id=item_id)
+    query_field = ".id" if field == "item_id" else "address"
+    return _print_single_record(client, menu="/ip/address", queries=[f"{query_field}={value}"], entity_name="IP address")
+
+
+def ip_route_list_impl(
+    client: RouterOSClient,
+    *,
+    dst_address: str | None = None,
+    disabled: bool | None = None,
+) -> list[dict[str, str]]:
+    queries = _build_equality_queries(**{"dst-address": dst_address, "disabled": disabled})
+    return _print_records(client, menu="/ip/route", queries=queries or None)
+
+
+def ip_route_get_impl(
+    client: RouterOSClient,
+    *,
+    dst_address: str | None = None,
+    item_id: str | None = None,
+) -> dict[str, str]:
+    field, value = _require_exactly_one_locator("IP route", dst_address=dst_address, item_id=item_id)
+    query_field = ".id" if field == "item_id" else "dst-address"
+    return _print_single_record(client, menu="/ip/route", queries=[f"{query_field}={value}"], entity_name="IP route")
+
+
+def dhcp_lease_list_impl(
+    client: RouterOSClient,
+    *,
+    address: str | None = None,
+    mac_address: str | None = None,
+    active_only: bool = False,
+) -> list[dict[str, str]]:
+    queries = _build_equality_queries(address=address, **{"mac-address": mac_address})
+    if active_only:
+        queries.append("status=bound")
+    return _print_records(client, menu="/ip/dhcp-server/lease", queries=queries or None)
+
+
+def dhcp_server_list_impl(client: RouterOSClient) -> list[dict[str, str]]:
+    return _print_records(client, menu="/ip/dhcp-server")
+
+
+def dhcp_network_list_impl(client: RouterOSClient) -> list[dict[str, str]]:
+    return _print_records(client, menu="/ip/dhcp-server/network")
+
+
+def dns_get_impl(client: RouterOSClient) -> dict[str, str]:
+    return _print_single_record(client, menu="/ip/dns", entity_name="DNS settings")
+
+
+def dns_set_impl(
+    client: RouterOSClient,
+    *,
+    servers: Sequence[str] | None = None,
+    allow_remote_requests: bool | None = None,
+    cache_size: str | None = None,
+) -> dict[str, str] | dict[str, bool]:
+    attributes: dict[str, Any] = {}
+    if servers is not None:
+        cleaned_servers = [server.strip() for server in servers if server.strip()]
+        if not cleaned_servers:
+            raise ValueError("servers must include at least one non-empty address")
+        attributes["servers"] = ",".join(cleaned_servers)
+    if allow_remote_requests is not None:
+        attributes["allow-remote-requests"] = allow_remote_requests
+    if cache_size is not None:
+        if not cache_size.strip():
+            raise ValueError("cache_size must not be empty")
+        attributes["cache-size"] = cache_size.strip()
+    if not attributes:
+        raise ValueError("At least one DNS setting must be provided")
+    return client.run("/ip/dns/set", attrs=attributes)
 
 
 def create_app(client: RouterOSClient) -> FastMCP:
@@ -126,6 +297,93 @@ def create_app(client: RouterOSClient) -> FastMCP:
         queries: list[str] | None = None,
     ) -> Any:
         return command_run_impl(client, command=command, attributes=attributes, queries=queries)
+
+    @app.tool(description="Get RouterOS system resource details.")
+    def system_resource_get() -> dict[str, str]:
+        return system_resource_get_impl(client)
+
+    @app.tool(description="Get the RouterOS system identity.")
+    def system_identity_get() -> dict[str, str]:
+        return system_identity_get_impl(client)
+
+    @app.tool(description="Get the RouterOS system clock settings.")
+    def system_clock_get() -> dict[str, str]:
+        return system_clock_get_impl(client)
+
+    @app.tool(description="List network interfaces with optional status filters.")
+    def interface_list(
+        running_only: bool = False,
+        disabled: bool | None = None,
+    ) -> list[dict[str, str]]:
+        return interface_list_impl(client, running_only=running_only, disabled=disabled)
+
+    @app.tool(description="Get one interface by name or RouterOS item id.")
+    def interface_get(
+        name: str | None = None,
+        item_id: str | None = None,
+    ) -> dict[str, str]:
+        return interface_get_impl(client, name=name, item_id=item_id)
+
+    @app.tool(description="List IP addresses with optional interface and disabled filters.")
+    def ip_address_list(
+        interface: str | None = None,
+        disabled: bool | None = None,
+    ) -> list[dict[str, str]]:
+        return ip_address_list_impl(client, interface=interface, disabled=disabled)
+
+    @app.tool(description="Get one IP address by address or RouterOS item id.")
+    def ip_address_get(
+        address: str | None = None,
+        item_id: str | None = None,
+    ) -> dict[str, str]:
+        return ip_address_get_impl(client, address=address, item_id=item_id)
+
+    @app.tool(description="List IP routes with optional destination and disabled filters.")
+    def ip_route_list(
+        dst_address: str | None = None,
+        disabled: bool | None = None,
+    ) -> list[dict[str, str]]:
+        return ip_route_list_impl(client, dst_address=dst_address, disabled=disabled)
+
+    @app.tool(description="Get one IP route by destination or RouterOS item id.")
+    def ip_route_get(
+        dst_address: str | None = None,
+        item_id: str | None = None,
+    ) -> dict[str, str]:
+        return ip_route_get_impl(client, dst_address=dst_address, item_id=item_id)
+
+    @app.tool(description="List DHCP leases with optional address, MAC, and active filters.")
+    def dhcp_lease_list(
+        address: str | None = None,
+        mac_address: str | None = None,
+        active_only: bool = False,
+    ) -> list[dict[str, str]]:
+        return dhcp_lease_list_impl(client, address=address, mac_address=mac_address, active_only=active_only)
+
+    @app.tool(description="List configured DHCP servers.")
+    def dhcp_server_list() -> list[dict[str, str]]:
+        return dhcp_server_list_impl(client)
+
+    @app.tool(description="List configured DHCP networks.")
+    def dhcp_network_list() -> list[dict[str, str]]:
+        return dhcp_network_list_impl(client)
+
+    @app.tool(description="Get RouterOS DNS settings.")
+    def dns_get() -> dict[str, str]:
+        return dns_get_impl(client)
+
+    @app.tool(description="Update RouterOS DNS settings.")
+    def dns_set(
+        servers: list[str] | None = None,
+        allow_remote_requests: bool | None = None,
+        cache_size: str | None = None,
+    ) -> dict[str, str] | dict[str, bool]:
+        return dns_set_impl(
+            client,
+            servers=servers,
+            allow_remote_requests=allow_remote_requests,
+            cache_size=cache_size,
+        )
 
     return app
 

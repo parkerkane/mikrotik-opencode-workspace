@@ -37,6 +37,8 @@ Definition of done:
 
 ## Phase 2: Generic Mutation Tools
 
+Status: done.
+
 Deliverables:
 
 - `resource_add`
@@ -57,6 +59,8 @@ Why next:
 - dedicated tools can then be thin wrappers rather than reimplementing command construction
 
 ## Phase 3: Core Operational Tools
+
+Status: done.
 
 Deliverables:
 
@@ -140,6 +144,47 @@ Why last:
 
 - long-running commands are harder to model and test
 - they depend on a solid client transport and reply correlation layer
+
+## Phase 7: Response Formatting Tightening
+
+Deliverables:
+
+- explicit presentation templates for common operational outputs
+- consistent Markdown table columns per tool family
+- stable handling for empty values and boolean-like fields in user-facing responses
+- concise summary lines for list-style operational outputs
+
+What needs to be done:
+
+- define default display formats for singleton tools such as system identity, clock, resource, and DNS settings
+- define fixed default columns for list tools such as interfaces, addresses, routes, and DHCP leases
+- standardize default rendering for missing values and status fields
+- document when raw JSON should still be shown instead of the formatted view
+
+Why separate:
+
+- this is a UX and presentation concern, not a RouterOS transport or MCP contract change
+- it should remain easy to improve iteratively without destabilizing tool behavior or tests
+
+## Phase 8: Operational Command Wrappers
+
+Deliverables:
+
+- dedicated wrappers for high-value operational commands such as ping, traceroute, and selected diagnostics
+- narrower input schemas than generic `command_run`
+- stable output shapes for common command results
+
+What needs to be done:
+
+- identify which operational commands are common enough to deserve first-class tools
+- define friendly tool names and constrained parameters for those commands
+- normalize the most useful result fields for each command family
+- add mocked tests for success, timeout, and RouterOS error cases
+
+Why separate:
+
+- generic command execution already exists, so this phase is about usability and safer schemas rather than raw capability
+- operational commands have command-specific inputs and outputs that are easier to consume through dedicated wrappers
 
 ## Cross-Cutting Work
 
