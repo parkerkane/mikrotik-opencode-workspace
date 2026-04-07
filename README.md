@@ -4,6 +4,8 @@
 
 MikroTik Manager is an OpenCode workspace for managing MikroTik routers through a local MCP server.
 
+Shared durable project context lives in `MEMORY.md`; local-only notes belong in `MEMORY.local.md`.
+
 Licensed under the Apache License, Version 2.0. See `LICENSE`.
 
 Implemented today:
