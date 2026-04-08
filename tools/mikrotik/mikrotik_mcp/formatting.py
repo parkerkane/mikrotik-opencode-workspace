@@ -166,10 +166,12 @@ def format_dns_resolve_result(record: dict[str, Any]) -> CallToolResult:
 def format_healthcheck_result(record: dict[str, Any]) -> CallToolResult:
     api = record.get("api") if isinstance(record.get("api"), dict) else {}
     scp = record.get("scp") if isinstance(record.get("scp"), dict) else {}
+    passwordless = record.get("passwordless") if isinstance(record.get("passwordless"), dict) else {}
     identity = api.get("identity") if isinstance(api.get("identity"), dict) else {}
     certificate = api.get("certificate") if isinstance(api.get("certificate"), dict) else {}
     config = record.get("config") if isinstance(record.get("config"), dict) else {}
     scp_probe = scp.get("probe") if isinstance(scp.get("probe"), dict) else {}
+    passwordless_probe = passwordless.get("probe") if isinstance(passwordless.get("probe"), dict) else {}
 
     display_record = {
         "success": record.get("success"),
@@ -198,7 +200,16 @@ def format_healthcheck_result(record: dict[str, Any]) -> CallToolResult:
         "scp-probe": scp_probe.get("operation"),
         "scp-working-directory": scp_probe.get("working_directory"),
         "scp-listing-count": scp_probe.get("listing_count"),
+        "passwordless-status": passwordless.get("status") or ("ok" if passwordless.get("ok") else "failed"),
+        "passwordless-code": passwordless.get("code"),
+        "passwordless-message": passwordless.get("message"),
+        "passwordless-host": passwordless.get("host"),
+        "passwordless-port": passwordless.get("port"),
+        "passwordless-duration-ms": passwordless.get("duration_ms"),
+        "passwordless-target-user": passwordless_probe.get("username"),
+        "passwordless-target-exists": passwordless_probe.get("target_exists"),
         "config-api-credentials": config.get("api_credentials_configured"),
+        "config-api-passwordless": config.get("api_passwordless_enabled"),
         "config-scp-credentials": config.get("scp_credentials_configured"),
         "config-scp-auth-mode": config.get("scp_auth_mode"),
         "config-scp-key-path": config.get("scp_key_path"),
@@ -237,7 +248,16 @@ def format_healthcheck_result(record: dict[str, Any]) -> CallToolResult:
                 "scp-probe",
                 "scp-working-directory",
                 "scp-listing-count",
+                "passwordless-status",
+                "passwordless-code",
+                "passwordless-message",
+                "passwordless-host",
+                "passwordless-port",
+                "passwordless-duration-ms",
+                "passwordless-target-user",
+                "passwordless-target-exists",
                 "config-api-credentials",
+                "config-api-passwordless",
                 "config-scp-credentials",
                 "config-scp-auth-mode",
                 "config-scp-key-path",

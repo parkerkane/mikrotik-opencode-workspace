@@ -15,7 +15,7 @@ An OpenCode workspace for managing MikroTik routers via an MCP (Model Context Pr
 ┌─────────────────────────────────────────────────────┐
 │  MikroTik MCP Server  (Python)                      │
 │                                                     │
-│  • Reads credentials from .env                      │
+│  • Reads startup auth settings from .env            │
 │  • Receives router host as CLI argument             │
 │  • Encodes/decodes RouterOS API sentences           │
 │  • Exposes MikroTik operations as MCP tools         │
@@ -34,7 +34,7 @@ An OpenCode workspace for managing MikroTik routers via an MCP (Model Context Pr
 ### 1. MCP Server (`tools/mikrotik/`)
 - Language: Python
 - Transport: **stdio** (launched by OpenCode as a child process)
-- Credentials: loaded from `.env` (`MIKROTIK_USER`, `MIKROTIK_PASSWORD`)
+- Startup auth: loaded from `.env` using either static API credentials or passwordless startup rotation over SSH key auth
 - Router host: passed as first CLI argument (`python tools/mikrotik/main.py <host>`)
 - Router transport: RouterOS API over TCP, optionally TLS on `8729`
 
@@ -44,8 +44,9 @@ An OpenCode workspace for managing MikroTik routers via an MCP (Model Context Pr
 
 ### 3. Environment File (`.env`)
 - **Never committed** — listed in `.gitignore`
-- Contains `MIKROTIK_USER` and `MIKROTIK_PASSWORD`
+- Contains `MIKROTIK_USER` and either `MIKROTIK_PASSWORD` or passwordless startup rotation settings
 - May also contain API transport settings such as `MIKROTIK_API_SSL` and `MIKROTIK_TLS_VERIFY`
+- May also contain `MIKROTIK_SCP_*` SSH bootstrap settings used for file transfer and passwordless startup rotation
 
 ### 4. Test Suite (`tools/mikrotik/tests/`)
 - Uses `pytest` for fast local verification
@@ -74,7 +75,7 @@ Common command patterns:
 | `/<menu>/monitor` | One-shot operational command where supported |
 | `/cancel` | Cancel a tagged long-running command |
 
-Authentication is performed with `/login` over the API socket.
+Authentication is performed with `/login` over the API socket. When passwordless startup mode is enabled, the MCP process first rotates a fresh API password over SSH using Paramiko, then uses that generated password for `/login`.
 
 Default connection settings:
 
@@ -88,7 +89,10 @@ Default connection settings:
 - `.env` is git-ignored
 - Prefer `api-ssl` on port `8729` in production
 - TLS verification should be enabled for production; a flag allows disabling it for lab environments
+- Passwordless startup mode removes the need to persist a long-lived API password in `.env`, but it does require an SSH private key on the local machine
 - The MCP server runs locally — it is not exposed over any network port
+
+See `docs/passwordless-startup.md` for the detailed passwordless startup flow and failure modes.
 
 ## Scalability
 

@@ -13,7 +13,8 @@ mikrotik-manager/
 │   ├── testing.md                # pytest and mocking strategy
 │   ├── mcp-server-design.md      # MCP tools catalog and design
 │   ├── project-structure.md      # This file
-│   └── mcp-configuration.md      # How to configure OpenCode MCP
+│   ├── mcp-configuration.md      # How to configure OpenCode MCP
+│   └── passwordless-startup.md   # SSH key-based startup password rotation
 │
 ├── requirements.txt              # Runtime and test dependencies
 ├── pytest.ini                    # Root pytest configuration
@@ -39,24 +40,28 @@ MIKROTIK_USER=admin
 MIKROTIK_PASSWORD=yourpassword
 MIKROTIK_API_SSL=true
 MIKROTIK_API_PORT=8729
-MIKROTIK_TLS_VERIFY=false
+MIKROTIK_TLS_VERIFY=true
 ```
+
+Passwordless startup rotation can replace `MIKROTIK_PASSWORD` with `MIKROTIK_API_PASSWORDLESS_ENABLED=true` and `MIKROTIK_SCP_PRIVATE_KEY=certs/router-key`. See `docs/passwordless-startup.md`.
 
 ### `.env.example`
 ```
 MIKROTIK_USER=admin
 MIKROTIK_PASSWORD=
+MIKROTIK_API_PASSWORDLESS_ENABLED=false
+MIKROTIK_API_PASSWORDLESS_LENGTH=32
 MIKROTIK_API_SSL=true
 MIKROTIK_API_PORT=8729
-MIKROTIK_TLS_VERIFY=false
+MIKROTIK_TLS_VERIFY=true
 ```
 
 ### `tools/mikrotik/main.py`
 Entry point responsibilities:
 1. Read `sys.argv[1]` for the router host (required)
 2. Load `.env` from the workspace root via `python-dotenv`
-3. Validate that `MIKROTIK_USER` and `MIKROTIK_PASSWORD` are set
-4. Instantiate the RouterOS API client with host + credentials
+3. Validate startup auth settings for either static password mode or passwordless startup rotation
+4. Instantiate the RouterOS API client with host + resolved credentials
 5. Start the MCP server on stdio
 
 ### `tools/mikrotik/mikrotik_mcp/client.py`

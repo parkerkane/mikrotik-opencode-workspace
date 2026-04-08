@@ -2,23 +2,21 @@
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
-MikroTik Manager is an OpenCode workspace for managing MikroTik routers through a local MCP server.
-
-Shared durable project context lives in `MEMORY.md`; local-only notes belong in `MEMORY.local.md`.
+MikroTik Manager is an OpenCode workspace for managing MikroTik routers through a local MCP server that talks to the RouterOS API.
 
 Licensed under the Apache License, Version 2.0. See `LICENSE`.
 
-Implemented today:
+## Features
+
 - RouterOS API client over TCP/TLS
-- `/login`
-- RouterOS word and sentence encoding/decoding
+- Passwordless API startup mode with SSH key-based password rotation
+- Healthcheck for API, SSH/SFTP, and passwordless readiness
 - stdio MCP bootstrap with FastMCP
-- generic read/mutation tools
-- optional `jq_filter` support for `resource_print`
-- core operational read tools for system, interfaces, addresses, routes, DHCP, and DNS
-- file listing, file download, and backup collection workflow
-- bridge, VLAN, firewall, PPP, and WireGuard tools
-- mocked pytest coverage for client and tool behavior
+- Low-level RouterOS read and write tools
+- Tools for system, interfaces, addresses, routes, DHCP, DNS, bridges, VLANs, firewall, PPP, and WireGuard
+- Router file listing, download, export, and backup collection workflows
+- Optional `jq_filter` support for normalized `resource_print` results
+- Mocked pytest coverage for client, startup, and tool behavior
 
 ## Layout
 
@@ -31,11 +29,13 @@ Implemented today:
 
 - Python 3.11+
 - RouterOS API enabled on the target router
-- workspace-root `.env` with credentials
+- workspace-root `.env` with startup auth settings
 
 Use `.env.example` as the starting point for your local `.env`.
 
-Example `.env`:
+For passwordless startup setup and behavior, see `docs/passwordless-startup.md`.
+
+Example `.env` for the default static-password mode:
 
 ```env
 MIKROTIK_USER=admin
@@ -52,24 +52,54 @@ MIKROTIK_SCP_PORT=22
 MIKROTIK_SCP_TIMEOUT=30.0
 ```
 
+Example `.env` for passwordless startup rotation:
+
+```env
+MIKROTIK_USER=admin
+MIKROTIK_API_PASSWORDLESS_ENABLED=true
+MIKROTIK_API_PASSWORDLESS_LENGTH=32
+MIKROTIK_API_SSL=true
+MIKROTIK_API_PORT=8729
+MIKROTIK_TLS_VERIFY=true
+
+# SSH bootstrap settings used to rotate a fresh API password at startup.
+MIKROTIK_SCP_HOST=
+MIKROTIK_SCP_USER=admin
+MIKROTIK_SCP_PRIVATE_KEY=certs/router-key
+MIKROTIK_SCP_KEY_PASSPHRASE=
+MIKROTIK_SCP_PORT=22
+MIKROTIK_SCP_TIMEOUT=30.0
+```
+
 Environment variables:
-- `MIKROTIK_USER`: required RouterOS API username
-- `MIKROTIK_PASSWORD`: required RouterOS API password
-- `MIKROTIK_API_SSL`: optional, `true` by default; set `false` for plain API on port `8728`
-- `MIKROTIK_API_PORT`: optional API port override; defaults to `8729` with TLS or `8728` without TLS
-- `MIKROTIK_TLS_VERIFY`: optional, `true` by default; set `false` for self-signed lab certificates when you do not want to trust local CA certs from `certs/`
-- `MIKROTIK_SCP_HOST`: optional SCP host override; defaults to the router host passed on the command line
-- `MIKROTIK_SCP_USER`: optional SCP username override; falls back to `MIKROTIK_USER`
-- `MIKROTIK_SCP_PASSWORD`: optional SCP password override; falls back to `MIKROTIK_PASSWORD`
-- `MIKROTIK_SCP_PORT`: optional SCP port override; defaults to `22`
-- `MIKROTIK_SCP_TIMEOUT`: optional SCP timeout in seconds; defaults to `30.0`
+
+Static mode needs `MIKROTIK_USER` and `MIKROTIK_PASSWORD`.
+
+Passwordless mode needs `MIKROTIK_USER`, `MIKROTIK_API_PASSWORDLESS_ENABLED=true`, and `MIKROTIK_SCP_PRIVATE_KEY`.
+
+| Variable | Static | Passwordless | Default | Purpose |
+|---|---|---|---|---|
+| `MIKROTIK_USER` | required | required | none | RouterOS user |
+| `MIKROTIK_PASSWORD` | required | unused | none | Static API password |
+| `MIKROTIK_API_PASSWORDLESS_ENABLED` | optional | required (`true`) | `false` | Enable startup password rotation |
+| `MIKROTIK_API_PASSWORDLESS_LENGTH` | unused | optional | `32` | Generated API password length |
+| `MIKROTIK_API_SSL` | optional | optional | `true` | Use TLS for the RouterOS API |
+| `MIKROTIK_API_PORT` | optional | optional | `8729` with TLS, else `8728` | API port override |
+| `MIKROTIK_TLS_VERIFY` | optional | optional | `true` | Verify the router certificate |
+| `MIKROTIK_SCP_HOST` | optional | optional | router host arg | SSH/SFTP host override |
+| `MIKROTIK_SCP_USER` | optional | optional | `MIKROTIK_USER` | SSH/SFTP username |
+| `MIKROTIK_SCP_PASSWORD` | optional | unused | `MIKROTIK_PASSWORD` | SSH/SFTP password fallback |
+| `MIKROTIK_SCP_PRIVATE_KEY` | optional | required | none | SSH private key for startup rotation |
+| `MIKROTIK_SCP_KEY_PASSPHRASE` | optional | optional | none | SSH private key passphrase |
+| `MIKROTIK_SCP_PORT` | optional | optional | `22` | SSH/SFTP port override |
+| `MIKROTIK_SCP_TIMEOUT` | optional | optional | `30.0` | SSH/SFTP timeout in seconds |
 
 Notes:
 - `.env` is loaded from the repository root.
 - TLS is enabled by default.
-- Default port is `8729` when SSL is enabled, otherwise `8728`.
 - When `certs/` exists, `.pem`, `.crt`, and `.cer` files in it are loaded into the TLS trust store except names ending with `.disabled`.
 - `certs/` is for local PEM CA certificates only; only `certs/README.md` is tracked by git.
+- Passwordless startup rotation currently requires SSH key auth and fails startup if the password rotation step fails.
 
 ## Setup
 

@@ -4,7 +4,15 @@ from pathlib import Path
 
 import pytest
 
-from mikrotik_mcp.downloads import SCPFileDownloader, RouterFileDownloadError, load_file_transfer_settings
+from mikrotik_mcp.downloads import (
+    SCPFileDownloader,
+    check_routeros_password_rotation_ready,
+    RouterFileDownloadError,
+    RouterSSHCommandError,
+    load_file_transfer_settings,
+    load_password_rotation_settings,
+    rotate_routeros_user_password,
+)
 
 
 def test_load_file_transfer_settings_uses_scp_overrides(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -150,12 +158,26 @@ class FakeSFTPClient:
 
 
 class FakeSSHClient:
-    def __init__(self, *, fail_on_connect: bool = False, sftp_client: FakeSFTPClient | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        fail_on_connect: bool = False,
+        fail_on_exec: bool = False,
+        exec_stdout: bytes = b"",
+        exec_stderr: bytes = b"",
+        exec_exit_status: int = 0,
+        sftp_client: FakeSFTPClient | None = None,
+    ) -> None:
         self.connected_to: tuple[str, int] | None = None
         self.connect_kwargs: dict[str, object] | None = None
         self.close_called = False
         self.policy = None
         self.fail_on_connect = fail_on_connect
+        self.fail_on_exec = fail_on_exec
+        self.exec_stdout = exec_stdout
+        self.exec_stderr = exec_stderr
+        self.exec_exit_status = exec_exit_status
+        self.commands: list[tuple[str, float | None]] = []
         self.sftp_client = sftp_client or FakeSFTPClient()
 
     def set_missing_host_key_policy(self, policy) -> None:
@@ -170,8 +192,35 @@ class FakeSSHClient:
     def open_sftp(self) -> FakeSFTPClient:
         return self.sftp_client
 
+    def exec_command(self, command: str, timeout: float | None = None):
+        if self.fail_on_exec:
+            raise OSError("exec failed")
+        self.commands.append((command, timeout))
+        return (
+            None,
+            FakeExecStream(self.exec_stdout, exit_status=self.exec_exit_status),
+            FakeExecStream(self.exec_stderr, exit_status=self.exec_exit_status),
+        )
+
     def close(self) -> None:
         self.close_called = True
+
+
+class FakeExecChannel:
+    def __init__(self, exit_status: int) -> None:
+        self.exit_status = exit_status
+
+    def recv_exit_status(self) -> int:
+        return self.exit_status
+
+
+class FakeExecStream:
+    def __init__(self, payload: bytes, *, exit_status: int) -> None:
+        self.payload = payload
+        self.channel = FakeExecChannel(exit_status)
+
+    def read(self) -> bytes:
+        return self.payload
 
 
 def test_scp_file_downloader_writes_downloaded_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -271,6 +320,89 @@ def test_scp_file_downloader_prefers_private_key(monkeypatch: pytest.MonkeyPatch
         "passphrase": "phrase",
         "timeout": 5.0,
     }
+
+
+def test_load_password_rotation_settings_requires_private_key(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("mikrotik_mcp.downloads.workspace_root", lambda: tmp_path)
+    monkeypatch.setenv("MIKROTIK_USER", "admin")
+    monkeypatch.setenv("MIKROTIK_SCP_PASSWORD", "secret")
+    monkeypatch.delenv("MIKROTIK_SCP_PRIVATE_KEY", raising=False)
+
+    with pytest.raises(RuntimeError, match="MIKROTIK_SCP_PRIVATE_KEY"):
+        load_password_rotation_settings("router.test")
+
+
+def test_rotate_routeros_user_password_runs_routeros_command_over_ssh(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    private_key = tmp_path / "router-key"
+    private_key.write_text("private-key", encoding="utf-8")
+    ssh_client = FakeSSHClient()
+    monkeypatch.setattr("mikrotik_mcp.downloads.workspace_root", lambda: tmp_path)
+    monkeypatch.setattr("mikrotik_mcp.downloads.paramiko.SSHClient", lambda: ssh_client)
+    monkeypatch.setenv("MIKROTIK_SCP_USER", "admin")
+    monkeypatch.setenv("MIKROTIK_SCP_PRIVATE_KEY", str(private_key))
+    monkeypatch.setenv("MIKROTIK_SCP_TIMEOUT", "9")
+
+    rotate_routeros_user_password(host="router.test", username="admin", new_password="A" * 32)
+
+    assert ssh_client.connect_kwargs == {
+        "hostname": "router.test",
+        "port": 22,
+        "username": "admin",
+        "key_filename": str(private_key),
+        "timeout": 9.0,
+    }
+    assert ssh_client.commands == [('/user set [find where name=admin] password=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', 9.0)]
+    assert ssh_client.close_called is True
+
+
+def test_rotate_routeros_user_password_wraps_remote_command_failures(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    private_key = tmp_path / "router-key"
+    private_key.write_text("private-key", encoding="utf-8")
+    ssh_client = FakeSSHClient(exec_stderr=b"permission denied", exec_exit_status=1)
+    monkeypatch.setattr("mikrotik_mcp.downloads.workspace_root", lambda: tmp_path)
+    monkeypatch.setattr("mikrotik_mcp.downloads.paramiko.SSHClient", lambda: ssh_client)
+    monkeypatch.setenv("MIKROTIK_SCP_USER", "admin")
+    monkeypatch.setenv("MIKROTIK_SCP_PRIVATE_KEY", str(private_key))
+
+    with pytest.raises(RouterSSHCommandError, match="permission denied"):
+        rotate_routeros_user_password(host="router.test", username="admin", new_password="A" * 32)
+
+    assert ssh_client.close_called is True
+
+
+def test_check_routeros_password_rotation_ready_runs_harmless_user_probe(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    private_key = tmp_path / "router-key"
+    private_key.write_text("private-key", encoding="utf-8")
+    ssh_client = FakeSSHClient(exec_stdout=b"1\n")
+    monkeypatch.setattr("mikrotik_mcp.downloads.workspace_root", lambda: tmp_path)
+    monkeypatch.setattr("mikrotik_mcp.downloads.paramiko.SSHClient", lambda: ssh_client)
+    monkeypatch.setenv("MIKROTIK_SCP_USER", "admin")
+    monkeypatch.setenv("MIKROTIK_SCP_PRIVATE_KEY", str(private_key))
+
+    result = check_routeros_password_rotation_ready(host="router.test", username="admin")
+
+    assert result == {
+        "host": "router.test",
+        "port": 22,
+        "username": "admin",
+        "target_exists": True,
+        "command": "/user print count-only where name=admin",
+    }
+    assert ssh_client.commands == [("/user print count-only where name=admin", 30.0)]
+    assert ssh_client.close_called is True
+
+
+def test_check_routeros_password_rotation_ready_rejects_missing_target_user(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    private_key = tmp_path / "router-key"
+    private_key.write_text("private-key", encoding="utf-8")
+    ssh_client = FakeSSHClient(exec_stdout=b"0\n")
+    monkeypatch.setattr("mikrotik_mcp.downloads.workspace_root", lambda: tmp_path)
+    monkeypatch.setattr("mikrotik_mcp.downloads.paramiko.SSHClient", lambda: ssh_client)
+    monkeypatch.setenv("MIKROTIK_SCP_USER", "admin")
+    monkeypatch.setenv("MIKROTIK_SCP_PRIVATE_KEY", str(private_key))
+
+    with pytest.raises(RouterSSHCommandError, match="was not found over SSH"):
+        check_routeros_password_rotation_ready(host="router.test", username="admin")
 
 
 def load_file_transfer_settings_for_test():

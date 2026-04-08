@@ -21,11 +21,19 @@ from time import perf_counter
 from typing import Any
 
 from ..client import RouterOSAuthError, RouterOSClient, RouterOSFatalError, RouterOSError, RouterOSTransportError
-from ..downloads import RouterFileDownloadError, SCPFileDownloader, load_file_transfer_settings, resolve_scp_private_key_path
+from ..downloads import (
+    RouterFileDownloadError,
+    RouterSSHCommandError,
+    SCPFileDownloader,
+    check_routeros_password_rotation_ready,
+    load_file_transfer_settings,
+    resolve_scp_private_key_path,
+)
 from ..filters import apply_jq_filter
 from ..server_helpers import (
     build_equality_queries,
     normalize_required_string,
+    parse_bool,
     print_records,
     print_single_record,
     require_exactly_one_locator,
@@ -260,6 +268,7 @@ def _elapsed_ms(started_at: float) -> int:
 def _api_config_status(client: RouterOSClient) -> dict[str, Any]:
     return {
         "api_credentials_configured": bool(client.username and client.password),
+        "api_passwordless_enabled": parse_bool(os.getenv("MIKROTIK_API_PASSWORDLESS_ENABLED"), default=False),
         "api_host": client.host,
         "api_port": client.port,
         "api_tls": client.use_ssl,
@@ -318,12 +327,66 @@ def _classify_scp_error(exc: Exception) -> str:
     return "scp.error"
 
 
-def _overall_health_status(*, api_ok: bool, scp_ok: bool) -> str:
-    if api_ok and scp_ok:
+def _classify_passwordless_error(exc: Exception) -> str:
+    message = str(exc).lower()
+    if isinstance(exc, RuntimeError) and "MIKROTIK_SCP_PRIVATE_KEY" in str(exc):
+        return "passwordless.key_required"
+    if isinstance(exc, RouterSSHCommandError):
+        if "was not found over ssh" in message:
+            return "passwordless.user_missing"
+        return "passwordless.exec_failed"
+    if isinstance(exc, (RouterFileDownloadError, ValueError)):
+        return "passwordless.ssh_unavailable"
+    return "passwordless.error"
+
+
+def _overall_health_status(*, api_ok: bool, scp_ok: bool, passwordless_enabled: bool, passwordless_ok: bool) -> str:
+    required_passwordless_ok = passwordless_ok if passwordless_enabled else True
+    if api_ok and scp_ok and required_passwordless_ok:
         return "healthy"
-    if api_ok or scp_ok:
+    if api_ok or scp_ok or (passwordless_enabled and passwordless_ok):
         return "degraded"
     return "failed"
+
+
+def _passwordless_health_status(client: RouterOSClient, config: dict[str, Any], scp_result: dict[str, Any]) -> dict[str, Any]:
+    if not config.get("api_passwordless_enabled"):
+        return {
+            "ok": True,
+            "status": "skipped",
+            "code": "passwordless.disabled",
+            "message": "Passwordless startup rotation is disabled",
+            "duration_ms": 0,
+        }
+
+    started_at = perf_counter()
+    target_user = os.getenv("MIKROTIK_USER") or client.username
+    try:
+        if config.get("scp_auth_mode") != "key":
+            raise RuntimeError("MIKROTIK_SCP_PRIVATE_KEY must be set when API passwordless startup rotation is enabled")
+        if not scp_result.get("ok"):
+            raise RouterFileDownloadError(str(scp_result.get("message") or "SSH bootstrap is unavailable"))
+        probe = check_routeros_password_rotation_ready(host=client.host, username=target_user)
+        result: dict[str, Any] = {
+            "ok": True,
+            "status": "ok",
+            "code": "passwordless.ok",
+            "message": f"Passwordless startup rotation SSH command succeeded for {probe['host']}:{probe['port']}",
+            "host": probe["host"],
+            "port": probe["port"],
+            "probe": probe,
+        }
+    except Exception as exc:
+        result = {
+            "ok": False,
+            "status": "failed",
+            "code": _classify_passwordless_error(exc),
+            "message": str(exc),
+            "host": config.get("resolved_host") or client.host,
+            "port": int(os.getenv("MIKROTIK_SCP_PORT") or 22),
+        }
+    result["duration_ms"] = _elapsed_ms(started_at)
+    return result
 
 
 def healthcheck_impl(client: RouterOSClient) -> dict[str, Any]:
@@ -392,7 +455,14 @@ def healthcheck_impl(client: RouterOSClient) -> dict[str, Any]:
             )
     scp_result["duration_ms"] = _elapsed_ms(scp_started_at)
 
-    overall_status = _overall_health_status(api_ok=bool(api_result["ok"]), scp_ok=bool(scp_result["ok"]))
+    passwordless_result = _passwordless_health_status(client, config, scp_result)
+
+    overall_status = _overall_health_status(
+        api_ok=bool(api_result["ok"]),
+        scp_ok=bool(scp_result["ok"]),
+        passwordless_enabled=bool(config.get("api_passwordless_enabled")),
+        passwordless_ok=bool(passwordless_result["ok"]),
+    )
 
     return {
         "success": overall_status == "healthy",
@@ -402,6 +472,7 @@ def healthcheck_impl(client: RouterOSClient) -> dict[str, Any]:
         "config": config,
         "api": api_result,
         "scp": scp_result,
+        "passwordless": passwordless_result,
     }
 
 

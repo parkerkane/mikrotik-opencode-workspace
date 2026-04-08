@@ -32,15 +32,30 @@ Placed at the workspace root, `opencode.json` is picked up automatically by Open
 The MCP server itself loads `.env` from the workspace root on startup, so credentials are available even if you don't export them in your shell:
 
 ```
-# .env  (workspace root, git-ignored)
+# Static password mode
 MIKROTIK_USER=admin
 MIKROTIK_PASSWORD=yourpassword
 MIKROTIK_API_SSL=true
 MIKROTIK_API_PORT=8729
-MIKROTIK_TLS_VERIFY=false
+MIKROTIK_TLS_VERIFY=true
+```
+
+```env
+# Passwordless startup rotation mode
+MIKROTIK_USER=admin
+MIKROTIK_API_PASSWORDLESS_ENABLED=true
+MIKROTIK_API_PASSWORDLESS_LENGTH=32
+MIKROTIK_SCP_USER=admin
+MIKROTIK_SCP_PRIVATE_KEY=certs/router-key
+MIKROTIK_SCP_KEY_PASSPHRASE=
+MIKROTIK_API_SSL=true
+MIKROTIK_API_PORT=8729
+MIKROTIK_TLS_VERIFY=true
 ```
 
 > This server loads `.env` itself on startup, so duplicating `MIKROTIK_*` values in `opencode.json` is unnecessary.
+
+For passwordless startup rotation details and the related `.env` settings, see `docs/passwordless-startup.md`.
 
 ## Managing multiple routers
 
@@ -90,4 +105,5 @@ Recommended defaults:
 - Use `api-ssl` on port `8729`
 - Set `MIKROTIK_API_SSL=true`
 - Set `MIKROTIK_API_PORT=8729`
-- For self-signed certificates, set `MIKROTIK_TLS_VERIFY=false`
+- Keep `MIKROTIK_TLS_VERIFY=true` when your local `certs/` trust store contains the router CA
+- For self-signed lab certificates without a trusted local CA, set `MIKROTIK_TLS_VERIFY=false`

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from mikrotik_mcp import runtime
 
 
@@ -41,3 +43,50 @@ def test_load_settings_passes_discovered_tls_ca_files(monkeypatch) -> None:
     assert client.use_ssl is True
     assert client.tls_verify is True
     assert client.tls_ca_files == ("/work/certs/router-ca.pem",)
+
+
+def test_load_settings_rotates_password_when_passwordless_enabled(monkeypatch) -> None:
+    monkeypatch.setenv("MIKROTIK_USER", "admin")
+    monkeypatch.delenv("MIKROTIK_PASSWORD", raising=False)
+    monkeypatch.setenv("MIKROTIK_API_PASSWORDLESS_ENABLED", "true")
+    monkeypatch.setattr(runtime, "load_dotenv", lambda path: None)
+    monkeypatch.setattr(runtime, "load_tls_ca_files", lambda: ())
+    monkeypatch.setattr(runtime, "rotate_startup_api_password", lambda host, username: "rotated-secret")
+
+    client = runtime.load_settings("router.test")
+
+    assert client.username == "admin"
+    assert client.password == "rotated-secret"
+
+
+def test_load_settings_requires_password_when_passwordless_disabled(monkeypatch) -> None:
+    monkeypatch.setenv("MIKROTIK_USER", "admin")
+    monkeypatch.delenv("MIKROTIK_PASSWORD", raising=False)
+    monkeypatch.delenv("MIKROTIK_API_PASSWORDLESS_ENABLED", raising=False)
+    monkeypatch.setattr(runtime, "load_dotenv", lambda path: None)
+
+    with pytest.raises(RuntimeError, match="MIKROTIK_USER and MIKROTIK_PASSWORD"):
+        runtime.load_settings("router.test")
+
+
+def test_rotate_startup_api_password_uses_requested_length(monkeypatch) -> None:
+    seen: dict[str, str] = {}
+    monkeypatch.setenv("MIKROTIK_API_PASSWORDLESS_LENGTH", "40")
+    monkeypatch.setattr(runtime, "generate_api_password", lambda length: "x" * length)
+    monkeypatch.setattr(
+        runtime,
+        "rotate_routeros_user_password",
+        lambda **kwargs: seen.update(kwargs),
+    )
+
+    password = runtime.rotate_startup_api_password("router.test", username="admin")
+
+    assert password == "x" * 40
+    assert seen == {"host": "router.test", "username": "admin", "new_password": "x" * 40}
+
+
+def test_rotate_startup_api_password_rejects_invalid_length(monkeypatch) -> None:
+    monkeypatch.setenv("MIKROTIK_API_PASSWORDLESS_LENGTH", "0")
+
+    with pytest.raises(RuntimeError, match="at least 1"):
+        runtime.rotate_startup_api_password("router.test", username="admin")

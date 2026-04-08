@@ -218,6 +218,7 @@ async def test_app_healthcheck_returns_api_and_scp_statuses(socket_enabled, monk
     }
     monkeypatch.setattr(core, "load_file_transfer_settings", lambda host: Settings())
     monkeypatch.setattr(core, "SCPFileDownloader", lambda settings: downloader)
+    monkeypatch.setattr(core, "check_routeros_password_rotation_ready", Mock())
 
     result = await create_app(client).call_tool("healthcheck", {})
 
@@ -227,6 +228,7 @@ async def test_app_healthcheck_returns_api_and_scp_statuses(socket_enabled, monk
     assert result.structuredContent["timestamp"].endswith("Z")
     assert result.structuredContent["config"] == {
         "api_credentials_configured": True,
+        "api_passwordless_enabled": False,
         "api_host": "router.test",
         "api_port": 8729,
         "api_tls": True,
@@ -276,6 +278,13 @@ async def test_app_healthcheck_returns_api_and_scp_statuses(socket_enabled, monk
         },
         "duration_ms": result.structuredContent["scp"]["duration_ms"],
     }
+    assert result.structuredContent["passwordless"] == {
+        "ok": True,
+        "status": "skipped",
+        "code": "passwordless.disabled",
+        "message": "Passwordless startup rotation is disabled",
+        "duration_ms": 0,
+    }
     assert isinstance(result.structuredContent["api"]["duration_ms"], int)
     assert isinstance(result.structuredContent["scp"]["duration_ms"], int)
     assert "Healthcheck: healthy" in result.content[0].text
@@ -289,6 +298,9 @@ async def test_app_healthcheck_returns_api_and_scp_statuses(socket_enabled, monk
     assert "| api-cert-not-after | Apr  3 15:39:31 2036 GMT |" in result.content[0].text
     assert "| scp-status | ok |" in result.content[0].text
     assert "| scp-probe | normalize+listdir_attr |" in result.content[0].text
+    assert "| passwordless-status | skipped |" in result.content[0].text
+    assert "| passwordless-code | passwordless.disabled |" in result.content[0].text
+    assert "| config-api-passwordless | no |" in result.content[0].text
     assert "| config-scp-auth-mode | password |" in result.content[0].text
     downloader.check_connection.assert_called_once_with()
 
@@ -742,6 +754,7 @@ def test_healthcheck_reports_separate_api_and_scp_statuses(monkeypatch: pytest.M
 
     monkeypatch.setattr(core, "load_file_transfer_settings", lambda host: Settings())
     monkeypatch.setattr(core, "SCPFileDownloader", lambda settings: downloader)
+    monkeypatch.setattr(core, "check_routeros_password_rotation_ready", Mock())
 
     result = healthcheck_impl(client)
 
@@ -749,6 +762,7 @@ def test_healthcheck_reports_separate_api_and_scp_statuses(monkeypatch: pytest.M
     assert result["status"] == "degraded"
     assert result["timestamp"].endswith("Z")
     assert result["config"]["api_host"] == "router.test"
+    assert result["config"]["api_passwordless_enabled"] is False
     assert result["config"]["scp_auth_mode"] == "password"
     assert result["config"]["scp_key_path"] is None
     assert result["api"]["ok"] is True
@@ -763,6 +777,7 @@ def test_healthcheck_reports_separate_api_and_scp_statuses(monkeypatch: pytest.M
         "port": 21,
         "duration_ms": result["scp"]["duration_ms"],
     }
+    assert result["passwordless"]["code"] == "passwordless.disabled"
     assert isinstance(result["scp"]["duration_ms"], int)
 
 
@@ -792,11 +807,13 @@ def test_healthcheck_marks_api_failure_without_raising(monkeypatch: pytest.Monke
     }
     monkeypatch.setattr(core, "load_file_transfer_settings", lambda host: Settings())
     monkeypatch.setattr(core, "SCPFileDownloader", lambda settings: downloader)
+    monkeypatch.setattr(core, "check_routeros_password_rotation_ready", Mock())
 
     result = healthcheck_impl(client)
 
     assert result["success"] is False
     assert result["status"] == "degraded"
+    assert result["config"]["api_passwordless_enabled"] is False
     assert result["config"]["scp_auth_mode"] == "password"
     assert result["config"]["scp_key_path"] is None
     assert result["api"] == {
@@ -824,6 +841,7 @@ def test_healthcheck_marks_api_failure_without_raising(monkeypatch: pytest.Monke
         },
         "duration_ms": result["scp"]["duration_ms"],
     }
+    assert result["passwordless"]["code"] == "passwordless.disabled"
     assert isinstance(result["api"]["duration_ms"], int)
 
 
@@ -843,14 +861,119 @@ def test_healthcheck_classifies_api_auth_and_scp_config_failures(monkeypatch: py
 
     monkeypatch.setattr(core, "load_file_transfer_settings", Mock(side_effect=RuntimeError("must be set before downloading files")))
     monkeypatch.setattr(core, "resolve_scp_private_key_path", Mock(side_effect=RuntimeError("missing key")))
+    monkeypatch.setattr(core, "check_routeros_password_rotation_ready", Mock())
 
     result = healthcheck_impl(client)
 
     assert result["status"] == "failed"
     assert result["api"]["code"] == "api.auth_failed"
     assert result["scp"]["code"] == "scp.config_missing"
+    assert result["passwordless"]["code"] == "passwordless.disabled"
+    assert result["config"]["api_passwordless_enabled"] is False
     assert result["config"]["scp_auth_mode"] == "password"
     assert result["config"]["scp_key_path"] is None
+
+
+def test_healthcheck_reports_passwordless_mode_when_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = Mock(host="router.test")
+    client.port = 8729
+    client.use_ssl = True
+    client.username = "api-user"
+    client.password = "rotated"
+    client.print.return_value = [{"name": "lab-router"}]
+    monkeypatch.setenv("MIKROTIK_API_PASSWORDLESS_ENABLED", "true")
+    monkeypatch.setenv("MIKROTIK_USER", "api-user")
+    monkeypatch.delenv("MIKROTIK_PASSWORD", raising=False)
+    monkeypatch.setenv("MIKROTIK_SCP_USER", "api-user")
+    monkeypatch.setenv("MIKROTIK_SCP_PRIVATE_KEY", "/workspace/certs/router-key")
+    monkeypatch.setattr(core, "resolve_scp_private_key_path", lambda: "/workspace/certs/router-key")
+
+    class Settings:
+        host = "router.test"
+        port = 22
+
+    downloader = Mock()
+    downloader.check_connection.return_value = {
+        "working_directory": "/",
+        "listing_count": 1,
+        "listing_sample": ["flash"],
+        "operation": "normalize+listdir_attr",
+    }
+    monkeypatch.setattr(core, "load_file_transfer_settings", lambda host: Settings())
+    monkeypatch.setattr(core, "SCPFileDownloader", lambda settings: downloader)
+    monkeypatch.setattr(
+        core,
+        "check_routeros_password_rotation_ready",
+        lambda host, username: {
+            "host": host,
+            "port": 22,
+            "username": username,
+            "target_exists": True,
+            "command": "/user print count-only where name=api-user",
+        },
+    )
+
+    result = healthcheck_impl(client)
+
+    assert result["config"]["api_passwordless_enabled"] is True
+    assert result["config"]["scp_auth_mode"] == "key"
+    assert result["passwordless"] == {
+        "ok": True,
+        "status": "ok",
+        "code": "passwordless.ok",
+        "message": "Passwordless startup rotation SSH command succeeded for router.test:22",
+        "host": "router.test",
+        "port": 22,
+        "probe": {
+            "host": "router.test",
+            "port": 22,
+            "username": "api-user",
+            "target_exists": True,
+            "command": "/user print count-only where name=api-user",
+        },
+        "duration_ms": result["passwordless"]["duration_ms"],
+    }
+    assert isinstance(result["passwordless"]["duration_ms"], int)
+
+
+def test_healthcheck_marks_passwordless_failure_when_ssh_command_probe_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = Mock(host="router.test")
+    client.port = 8729
+    client.use_ssl = True
+    client.username = "api-user"
+    client.password = "rotated"
+    client.print.return_value = [{"name": "lab-router"}]
+    monkeypatch.setenv("MIKROTIK_API_PASSWORDLESS_ENABLED", "true")
+    monkeypatch.setenv("MIKROTIK_USER", "api-user")
+    monkeypatch.setenv("MIKROTIK_SCP_USER", "api-user")
+    monkeypatch.setenv("MIKROTIK_SCP_PRIVATE_KEY", "/workspace/certs/router-key")
+    monkeypatch.setattr(core, "resolve_scp_private_key_path", lambda: "/workspace/certs/router-key")
+
+    class Settings:
+        host = "router.test"
+        port = 22
+
+    downloader = Mock()
+    downloader.check_connection.return_value = {
+        "working_directory": "/",
+        "listing_count": 1,
+        "listing_sample": ["flash"],
+        "operation": "normalize+listdir_attr",
+    }
+    monkeypatch.setattr(core, "load_file_transfer_settings", lambda host: Settings())
+    monkeypatch.setattr(core, "SCPFileDownloader", lambda settings: downloader)
+    monkeypatch.setattr(
+        core,
+        "check_routeros_password_rotation_ready",
+        Mock(side_effect=core.RouterSSHCommandError("permission denied")),
+    )
+
+    result = healthcheck_impl(client)
+
+    assert result["success"] is False
+    assert result["status"] == "degraded"
+    assert result["passwordless"]["code"] == "passwordless.exec_failed"
+    assert result["passwordless"]["message"] == "permission denied"
 
 
 def test_interface_monitor_returns_first_record() -> None:

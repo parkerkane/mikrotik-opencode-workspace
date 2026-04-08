@@ -19,6 +19,15 @@
 - Run full test suite: `pytest`
 - Run one focused test: `pytest tools/mikrotik/tests/test_server.py -k invalid_jq_filter`
 
+## Router-First Checks
+- For requests about current router state, prefer querying the live router through MCP tools first when feasible instead of answering from code, docs, or assumptions.
+- This also applies before most router changes: inspect the current state first when it helps confirm targets, existing config, or safety.
+- In this project, short operational prompts like `list files`, `list users`, `show interfaces`, or `check routes` should default to router state, not workspace or repository state, unless the user clearly asks about local files or code.
+- Examples: list users, router files, interfaces, addresses, routes, DHCP leases, firewall rules, active sessions, and current health or status.
+- For codebase or implementation questions, inspect the repository instead of the router.
+- If a request is ambiguous between router state and local workspace state, prefer the router interpretation first and briefly clarify only when needed.
+- If live router access is unavailable, say so explicitly before falling back to indirect evidence such as code, config, or documentation.
+
 ## Response Formatting
 - Default to human-friendly Markdown when presenting router data.
 - Use Markdown tables for tabular RouterOS results like users, interfaces, addresses, and routes.

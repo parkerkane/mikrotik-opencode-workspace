@@ -17,6 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 import os
+import shlex
 from typing import Protocol
 
 import paramiko
@@ -25,6 +26,10 @@ from .server_helpers import workspace_root
 
 
 class RouterFileDownloadError(RuntimeError):
+    pass
+
+
+class RouterSSHCommandError(RuntimeError):
     pass
 
 
@@ -100,25 +105,7 @@ class SCPFileDownloader:
             self._close_session(ssh_client)
 
     def _connect(self) -> paramiko.SSHClient:
-        ssh_client = paramiko.SSHClient()
-        ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        connect_kwargs: dict[str, object] = {
-            "hostname": self.settings.host,
-            "port": self.settings.port,
-            "username": self.settings.username,
-            "timeout": self.settings.timeout,
-        }
-        if self.settings.private_key:
-            connect_kwargs["key_filename"] = self.settings.private_key
-            if self.settings.key_passphrase:
-                connect_kwargs["passphrase"] = self.settings.key_passphrase
-        elif self.settings.password:
-            connect_kwargs["password"] = self.settings.password
-
-        ssh_client.connect(
-            **connect_kwargs,
-        )
-        return ssh_client
+        return open_ssh_client(self.settings)
 
     def _close_session(self, ssh_client: paramiko.SSHClient) -> None:
         ssh_client.close()
@@ -144,6 +131,53 @@ def load_file_transfer_settings(host: str) -> FileTransferSettings:
     )
 
 
+def load_password_rotation_settings(host: str) -> FileTransferSettings:
+    settings = load_file_transfer_settings(host)
+    if not settings.private_key:
+        raise RuntimeError("MIKROTIK_SCP_PRIVATE_KEY must be set when API passwordless startup rotation is enabled")
+    return settings
+
+
+def rotate_routeros_user_password(*, host: str, username: str, new_password: str) -> None:
+    settings = load_password_rotation_settings(host)
+    ssh_client = open_ssh_client(settings)
+    command = _build_password_set_command(username=username, password=new_password)
+    try:
+        run_ssh_command(ssh_client, command, timeout=settings.timeout)
+    except (paramiko.SSHException, OSError, RouterSSHCommandError) as exc:
+        raise RouterSSHCommandError(
+            f"Failed to rotate RouterOS password for user '{username}' on {settings.host}:{settings.port}: {exc}"
+        ) from exc
+    finally:
+        ssh_client.close()
+
+
+def check_routeros_password_rotation_ready(*, host: str, username: str) -> dict[str, object]:
+    settings = load_password_rotation_settings(host)
+    ssh_client = open_ssh_client(settings)
+    command = _build_password_ready_command(username=username)
+    try:
+        result = run_ssh_command(ssh_client, command, timeout=settings.timeout)
+    except (paramiko.SSHException, OSError, RouterSSHCommandError) as exc:
+        raise RouterSSHCommandError(
+            f"Failed to verify RouterOS passwordless readiness for user '{username}' on {settings.host}:{settings.port}: {exc}"
+        ) from exc
+    finally:
+        ssh_client.close()
+
+    user_count = _parse_count_output(result)
+    if user_count != 1:
+        raise RouterSSHCommandError(f"RouterOS user '{username}' was not found over SSH")
+
+    return {
+        "host": settings.host,
+        "port": settings.port,
+        "username": username,
+        "target_exists": True,
+        "command": command,
+    }
+
+
 def resolve_scp_private_key_path() -> str | None:
     configured_path = os.getenv("MIKROTIK_SCP_PRIVATE_KEY")
     if configured_path:
@@ -166,3 +200,75 @@ def _normalize_router_path(router_path: str) -> str:
     if not value:
         raise ValueError("router_path is required")
     return value.lstrip("/")
+
+
+def open_ssh_client(settings: FileTransferSettings) -> paramiko.SSHClient:
+    ssh_client = paramiko.SSHClient()
+    ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    connect_kwargs: dict[str, object] = {
+        "hostname": settings.host,
+        "port": settings.port,
+        "username": settings.username,
+        "timeout": settings.timeout,
+    }
+    if settings.private_key:
+        connect_kwargs["key_filename"] = settings.private_key
+        if settings.key_passphrase:
+            connect_kwargs["passphrase"] = settings.key_passphrase
+    elif settings.password:
+        connect_kwargs["password"] = settings.password
+
+    ssh_client.connect(**connect_kwargs)
+    return ssh_client
+
+
+def run_ssh_command(ssh_client: paramiko.SSHClient, command: str, *, timeout: float) -> str:
+    _, stdout, stderr = ssh_client.exec_command(command, timeout=timeout)
+    stdout_data = stdout.read()
+    stderr_data = stderr.read()
+    stdout_text = _decode_ssh_stream(stdout_data)
+    stderr_text = _decode_ssh_stream(stderr_data)
+
+    exit_status = 0
+    channel = getattr(stdout, "channel", None)
+    if channel is not None and hasattr(channel, "recv_exit_status"):
+        exit_status = channel.recv_exit_status()
+
+    if exit_status != 0 or stderr_text:
+        problem = stderr_text or stdout_text or f"remote command exited with status {exit_status}"
+        raise RouterSSHCommandError(problem)
+    return stdout_text
+
+
+def _decode_ssh_stream(data: bytes | str) -> str:
+    if isinstance(data, bytes):
+        return data.decode("utf-8", errors="replace").strip()
+    return str(data).strip()
+
+
+def _build_password_set_command(*, username: str, password: str) -> str:
+    quoted_username = shlex.quote(_normalize_routeros_string(username, field_name="username"))
+    quoted_password = shlex.quote(_normalize_routeros_string(password, field_name="password"))
+    return f"/user set [find where name={quoted_username}] password={quoted_password}"
+
+
+def _build_password_ready_command(*, username: str) -> str:
+    quoted_username = shlex.quote(_normalize_routeros_string(username, field_name="username"))
+    return f"/user print count-only where name={quoted_username}"
+
+
+def _normalize_routeros_string(value: str, *, field_name: str) -> str:
+    normalized = value.strip()
+    if not normalized:
+        raise ValueError(f"{field_name} is required")
+    return normalized
+
+
+def _parse_count_output(value: str) -> int:
+    normalized = value.strip()
+    if not normalized:
+        raise RouterSSHCommandError("RouterOS readiness probe returned an empty response")
+    try:
+        return int(normalized)
+    except ValueError as exc:
+        raise RouterSSHCommandError(f"RouterOS readiness probe returned an unexpected response: {normalized}") from exc

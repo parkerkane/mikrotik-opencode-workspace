@@ -13,7 +13,10 @@ Shared durable project context intended to be safe to keep in git.
 ## Runtime Gotchas
 - `main.py` requires router host arg: `python tools/mikrotik/main.py <host>`.
 - Startup loads `.env` from the workspace root.
-- Required env vars: `MIKROTIK_USER`, `MIKROTIK_PASSWORD`.
+- Default startup env vars: `MIKROTIK_USER`, `MIKROTIK_PASSWORD`.
+- `MIKROTIK_API_PASSWORDLESS_ENABLED=true` switches startup to SSH key-based API password rotation and no longer requires `MIKROTIK_PASSWORD`.
+- Passwordless startup rotation requires `MIKROTIK_SCP_PRIVATE_KEY` and reuses the existing `MIKROTIK_SCP_*` SSH settings.
+- `MIKROTIK_API_PASSWORDLESS_LENGTH` controls the generated API password length and defaults to `32`.
 - Optional transport env vars: `MIKROTIK_API_SSL`, `MIKROTIK_API_PORT`, `MIKROTIK_TLS_VERIFY`.
 - SCP key auth requires an explicit `MIKROTIK_SCP_PRIVATE_KEY`; otherwise SCP falls back to password env vars.
 - SCP key passphrases can be provided with `MIKROTIK_SCP_KEY_PASSPHRASE`.

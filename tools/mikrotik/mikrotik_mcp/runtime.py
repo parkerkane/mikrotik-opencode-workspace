@@ -14,6 +14,8 @@
 
 from __future__ import annotations
 
+import secrets
+import string
 import os
 import sys
 
@@ -21,10 +23,13 @@ from dotenv import load_dotenv
 
 from .app import create_app
 from .client import RouterOSClient
+from .downloads import rotate_routeros_user_password
 from .server_helpers import parse_bool, workspace_root
 
 
 CERTIFICATE_EXTENSIONS = {".pem", ".crt", ".cer"}
+PASSWORDLESS_PASSWORD_ALPHABET = string.ascii_letters + string.digits
+DEFAULT_PASSWORDLESS_LENGTH = 32
 
 
 def load_tls_ca_files() -> tuple[str, ...]:
@@ -44,9 +49,15 @@ def load_settings(host: str) -> RouterOSClient:
     load_dotenv(workspace_root() / ".env")
 
     username = os.getenv("MIKROTIK_USER")
-    password = os.getenv("MIKROTIK_PASSWORD")
-    if not username or not password:
-        raise RuntimeError("MIKROTIK_USER and MIKROTIK_PASSWORD must be set before starting the MCP server")
+    if not username:
+        raise RuntimeError("MIKROTIK_USER must be set before starting the MCP server")
+
+    if passwordless_enabled():
+        password = rotate_startup_api_password(host, username=username)
+    else:
+        password = os.getenv("MIKROTIK_PASSWORD")
+        if not password:
+            raise RuntimeError("MIKROTIK_USER and MIKROTIK_PASSWORD must be set before starting the MCP server")
 
     use_ssl = parse_bool(os.getenv("MIKROTIK_API_SSL"), default=True)
     tls_verify = parse_bool(os.getenv("MIKROTIK_TLS_VERIFY"), default=True)
@@ -62,6 +73,24 @@ def load_settings(host: str) -> RouterOSClient:
         tls_verify=tls_verify,
         tls_ca_files=tls_ca_files,
     )
+
+
+def passwordless_enabled() -> bool:
+    return parse_bool(os.getenv("MIKROTIK_API_PASSWORDLESS_ENABLED"), default=False)
+
+
+def rotate_startup_api_password(host: str, *, username: str) -> str:
+    length = int(os.getenv("MIKROTIK_API_PASSWORDLESS_LENGTH") or DEFAULT_PASSWORDLESS_LENGTH)
+    if length < 1:
+        raise RuntimeError("MIKROTIK_API_PASSWORDLESS_LENGTH must be at least 1")
+
+    new_password = generate_api_password(length)
+    rotate_routeros_user_password(host=host, username=username, new_password=new_password)
+    return new_password
+
+
+def generate_api_password(length: int) -> str:
+    return "".join(secrets.choice(PASSWORDLESS_PASSWORD_ALPHABET) for _ in range(length))
 
 
 def main(argv: list[str] | None = None) -> None:
