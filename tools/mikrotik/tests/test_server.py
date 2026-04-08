@@ -202,7 +202,7 @@ async def test_app_healthcheck_returns_api_and_scp_statuses(socket_enabled, monk
     monkeypatch.setenv("MIKROTIK_USER", "api-user")
     monkeypatch.setenv("MIKROTIK_PASSWORD", "api-pass")
     monkeypatch.setenv("MIKROTIK_SCP_USER", "scp-user")
-    monkeypatch.setenv("MIKROTIK_SCP_PASSWORD", "scp-pass")
+    monkeypatch.delenv("MIKROTIK_SCP_PASSWORD", raising=False)
     monkeypatch.setenv("MIKROTIK_SCP_HOST", "files.router.test")
 
     class Settings:
@@ -231,6 +231,8 @@ async def test_app_healthcheck_returns_api_and_scp_statuses(socket_enabled, monk
         "api_port": 8729,
         "api_tls": True,
         "scp_credentials_configured": True,
+        "scp_auth_mode": "password",
+        "scp_key_path": None,
         "scp_host_override": True,
         "scp_port_override": False,
         "resolved_host": "files.router.test",
@@ -287,6 +289,7 @@ async def test_app_healthcheck_returns_api_and_scp_statuses(socket_enabled, monk
     assert "| api-cert-not-after | Apr  3 15:39:31 2036 GMT |" in result.content[0].text
     assert "| scp-status | ok |" in result.content[0].text
     assert "| scp-probe | normalize+listdir_attr |" in result.content[0].text
+    assert "| config-scp-auth-mode | password |" in result.content[0].text
     downloader.check_connection.assert_called_once_with()
 
 
@@ -728,7 +731,7 @@ def test_healthcheck_reports_separate_api_and_scp_statuses(monkeypatch: pytest.M
     monkeypatch.setenv("MIKROTIK_USER", "api-user")
     monkeypatch.setenv("MIKROTIK_PASSWORD", "api-pass")
     monkeypatch.setenv("MIKROTIK_SCP_USER", "scp-user")
-    monkeypatch.setenv("MIKROTIK_SCP_PASSWORD", "scp-pass")
+    monkeypatch.delenv("MIKROTIK_SCP_PASSWORD", raising=False)
 
     class Settings:
         host = "files.router.test"
@@ -746,6 +749,8 @@ def test_healthcheck_reports_separate_api_and_scp_statuses(monkeypatch: pytest.M
     assert result["status"] == "degraded"
     assert result["timestamp"].endswith("Z")
     assert result["config"]["api_host"] == "router.test"
+    assert result["config"]["scp_auth_mode"] == "password"
+    assert result["config"]["scp_key_path"] is None
     assert result["api"]["ok"] is True
     assert result["api"]["code"] == "api.ok"
     assert "certificate" not in result["api"]
@@ -772,7 +777,7 @@ def test_healthcheck_marks_api_failure_without_raising(monkeypatch: pytest.Monke
     monkeypatch.setenv("MIKROTIK_USER", "api-user")
     monkeypatch.setenv("MIKROTIK_PASSWORD", "api-pass")
     monkeypatch.setenv("MIKROTIK_SCP_USER", "scp-user")
-    monkeypatch.setenv("MIKROTIK_SCP_PASSWORD", "scp-pass")
+    monkeypatch.delenv("MIKROTIK_SCP_PASSWORD", raising=False)
 
     class Settings:
         host = "files.router.test"
@@ -792,6 +797,8 @@ def test_healthcheck_marks_api_failure_without_raising(monkeypatch: pytest.Monke
 
     assert result["success"] is False
     assert result["status"] == "degraded"
+    assert result["config"]["scp_auth_mode"] == "password"
+    assert result["config"]["scp_key_path"] is None
     assert result["api"] == {
         "ok": False,
         "status": "failed",
@@ -835,12 +842,15 @@ def test_healthcheck_classifies_api_auth_and_scp_config_failures(monkeypatch: py
     monkeypatch.delenv("MIKROTIK_SCP_PASSWORD", raising=False)
 
     monkeypatch.setattr(core, "load_file_transfer_settings", Mock(side_effect=RuntimeError("must be set before downloading files")))
+    monkeypatch.setattr(core, "resolve_scp_private_key_path", Mock(side_effect=RuntimeError("missing key")))
 
     result = healthcheck_impl(client)
 
     assert result["status"] == "failed"
     assert result["api"]["code"] == "api.auth_failed"
     assert result["scp"]["code"] == "scp.config_missing"
+    assert result["config"]["scp_auth_mode"] == "password"
+    assert result["config"]["scp_key_path"] is None
 
 
 def test_interface_monitor_returns_first_record() -> None:

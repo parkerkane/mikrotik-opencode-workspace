@@ -7,12 +7,14 @@ import pytest
 from mikrotik_mcp.downloads import SCPFileDownloader, RouterFileDownloadError, load_file_transfer_settings
 
 
-def test_load_file_transfer_settings_uses_scp_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_load_file_transfer_settings_uses_scp_overrides(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("mikrotik_mcp.downloads.workspace_root", lambda: tmp_path)
     monkeypatch.setenv("MIKROTIK_USER", "api-user")
     monkeypatch.setenv("MIKROTIK_PASSWORD", "api-pass")
     monkeypatch.setenv("MIKROTIK_SCP_HOST", "files.router.test")
     monkeypatch.setenv("MIKROTIK_SCP_USER", "scp-user")
     monkeypatch.setenv("MIKROTIK_SCP_PASSWORD", "scp-pass")
+    monkeypatch.delenv("MIKROTIK_SCP_PRIVATE_KEY", raising=False)
     monkeypatch.setenv("MIKROTIK_SCP_PORT", "2222")
     monkeypatch.setenv("MIKROTIK_SCP_TIMEOUT", "12.5")
 
@@ -21,15 +23,18 @@ def test_load_file_transfer_settings_uses_scp_overrides(monkeypatch: pytest.Monk
     assert settings.host == "files.router.test"
     assert settings.username == "scp-user"
     assert settings.password == "scp-pass"
+    assert settings.private_key is None
     assert settings.port == 2222
     assert settings.timeout == 12.5
 
 
-def test_load_file_transfer_settings_falls_back_to_api_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_load_file_transfer_settings_falls_back_to_api_credentials(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("mikrotik_mcp.downloads.workspace_root", lambda: tmp_path)
     monkeypatch.setenv("MIKROTIK_USER", "admin")
     monkeypatch.setenv("MIKROTIK_PASSWORD", "secret")
     monkeypatch.delenv("MIKROTIK_SCP_USER", raising=False)
     monkeypatch.delenv("MIKROTIK_SCP_PASSWORD", raising=False)
+    monkeypatch.delenv("MIKROTIK_SCP_PRIVATE_KEY", raising=False)
     monkeypatch.delenv("MIKROTIK_SCP_HOST", raising=False)
     monkeypatch.delenv("MIKROTIK_SCP_PORT", raising=False)
 
@@ -38,16 +43,64 @@ def test_load_file_transfer_settings_falls_back_to_api_credentials(monkeypatch: 
     assert settings.host == "router.test"
     assert settings.username == "admin"
     assert settings.password == "secret"
+    assert settings.private_key is None
     assert settings.port == 22
 
 
-def test_load_file_transfer_settings_requires_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_load_file_transfer_settings_uses_explicit_private_key(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("mikrotik_mcp.downloads.workspace_root", lambda: tmp_path)
+    private_key = tmp_path / "router-key"
+    private_key.write_text("private-key", encoding="utf-8")
+    monkeypatch.setenv("MIKROTIK_SCP_USER", "mcprw")
+    monkeypatch.setenv("MIKROTIK_SCP_PRIVATE_KEY", str(private_key))
+    monkeypatch.setenv("MIKROTIK_SCP_KEY_PASSPHRASE", "phrase")
+    monkeypatch.setenv("MIKROTIK_SCP_PASSWORD", "ignored-pass")
+
+    settings = load_file_transfer_settings("router.test")
+
+    assert settings.username == "mcprw"
+    assert settings.private_key == str(private_key)
+    assert settings.key_passphrase == "phrase"
+    assert settings.password is None
+
+
+def test_load_file_transfer_settings_does_not_use_default_router_key(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    certs_dir = tmp_path / "certs"
+    certs_dir.mkdir()
+    (certs_dir / "router-key").write_text("private-key", encoding="utf-8")
+    monkeypatch.setattr("mikrotik_mcp.downloads.workspace_root", lambda: tmp_path)
+    monkeypatch.setenv("MIKROTIK_SCP_USER", "mcprw")
+    monkeypatch.delenv("MIKROTIK_SCP_PRIVATE_KEY", raising=False)
+    monkeypatch.setenv("MIKROTIK_SCP_PASSWORD", "scp-pass")
+
+    settings = load_file_transfer_settings("router.test")
+
+    assert settings.username == "mcprw"
+    assert settings.private_key is None
+    assert settings.password == "scp-pass"
+
+
+def test_load_file_transfer_settings_requires_credentials(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("mikrotik_mcp.downloads.workspace_root", lambda: tmp_path)
     monkeypatch.delenv("MIKROTIK_USER", raising=False)
     monkeypatch.delenv("MIKROTIK_PASSWORD", raising=False)
     monkeypatch.delenv("MIKROTIK_SCP_USER", raising=False)
     monkeypatch.delenv("MIKROTIK_SCP_PASSWORD", raising=False)
+    monkeypatch.setenv("MIKROTIK_SCP_PRIVATE_KEY", "/definitely/missing/key")
 
-    with pytest.raises(RuntimeError, match="must be set before downloading files"):
+    with pytest.raises(RuntimeError, match="SCP private key file"):
+        load_file_transfer_settings("router.test")
+
+
+def test_load_file_transfer_settings_requires_auth_when_no_key_or_password(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr("mikrotik_mcp.downloads.workspace_root", lambda: tmp_path)
+    monkeypatch.delenv("MIKROTIK_USER", raising=False)
+    monkeypatch.delenv("MIKROTIK_PASSWORD", raising=False)
+    monkeypatch.setenv("MIKROTIK_SCP_USER", "mcprw")
+    monkeypatch.delenv("MIKROTIK_SCP_PASSWORD", raising=False)
+    monkeypatch.setenv("MIKROTIK_SCP_PRIVATE_KEY", str(tmp_path / "missing-key"))
+
+    with pytest.raises(RuntimeError, match="SCP private key file"):
         load_file_transfer_settings("router.test")
 
 
@@ -99,7 +152,7 @@ class FakeSFTPClient:
 class FakeSSHClient:
     def __init__(self, *, fail_on_connect: bool = False, sftp_client: FakeSFTPClient | None = None) -> None:
         self.connected_to: tuple[str, int] | None = None
-        self.logged_in_as: tuple[str, str] | None = None
+        self.connect_kwargs: dict[str, object] | None = None
         self.close_called = False
         self.policy = None
         self.fail_on_connect = fail_on_connect
@@ -108,12 +161,11 @@ class FakeSSHClient:
     def set_missing_host_key_policy(self, policy) -> None:
         self.policy = policy
 
-    def connect(self, hostname: str, port: int, username: str, password: str, timeout: float) -> None:
+    def connect(self, **kwargs) -> None:
         if self.fail_on_connect:
             raise OSError("connect failed")
-        self.connected_to = (hostname, port)
-        self.logged_in_as = (username, password)
-        self.timeout = timeout
+        self.connected_to = (kwargs["hostname"], kwargs["port"])
+        self.connect_kwargs = kwargs
 
     def open_sftp(self) -> FakeSFTPClient:
         return self.sftp_client
@@ -134,7 +186,13 @@ def test_scp_file_downloader_writes_downloaded_file(monkeypatch: pytest.MonkeyPa
 
     assert destination.read_bytes() == b"backup-data"
     assert ssh_client.connected_to == ("router.test", 22)
-    assert ssh_client.logged_in_as == ("admin", "secret")
+    assert ssh_client.connect_kwargs == {
+        "hostname": "router.test",
+        "port": 22,
+        "username": "admin",
+        "password": "secret",
+        "timeout": 5.0,
+    }
     assert ssh_client.close_called is True
 
 
@@ -147,7 +205,13 @@ def test_scp_file_downloader_check_connection_logs_in_and_closes(monkeypatch: py
     result = downloader.check_connection()
 
     assert ssh_client.connected_to == ("router.test", 22)
-    assert ssh_client.logged_in_as == ("admin", "secret")
+    assert ssh_client.connect_kwargs == {
+        "hostname": "router.test",
+        "port": 22,
+        "username": "admin",
+        "password": "secret",
+        "timeout": 5.0,
+    }
     assert ssh_client.close_called is True
     assert result == {
         "working_directory": "/",
@@ -191,11 +255,44 @@ def test_scp_file_downloader_check_connection_wraps_directory_probe_failures(mon
     assert ssh_client.close_called is True
 
 
+def test_scp_file_downloader_prefers_private_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    ssh_client = FakeSSHClient()
+    monkeypatch.setattr("mikrotik_mcp.downloads.paramiko.SSHClient", lambda: ssh_client)
+
+    downloader = SCPFileDownloader(load_key_transfer_settings_for_test())
+
+    downloader.check_connection()
+
+    assert ssh_client.connect_kwargs == {
+        "hostname": "router.test",
+        "port": 22,
+        "username": "mcprw",
+        "key_filename": "/workspace/certs/router-key",
+        "passphrase": "phrase",
+        "timeout": 5.0,
+    }
+
+
 def load_file_transfer_settings_for_test():
     class Settings:
         host = "router.test"
         username = "admin"
         password = "secret"
+        private_key = None
+        key_passphrase = None
+        port = 22
+        timeout = 5.0
+
+    return Settings()
+
+
+def load_key_transfer_settings_for_test():
+    class Settings:
+        host = "router.test"
+        username = "mcprw"
+        password = "secret"
+        private_key = "/workspace/certs/router-key"
+        key_passphrase = "phrase"
         port = 22
         timeout = 5.0
 

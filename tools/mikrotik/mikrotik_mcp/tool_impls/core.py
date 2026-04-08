@@ -21,7 +21,7 @@ from time import perf_counter
 from typing import Any
 
 from ..client import RouterOSAuthError, RouterOSClient, RouterOSFatalError, RouterOSError, RouterOSTransportError
-from ..downloads import RouterFileDownloadError, SCPFileDownloader, load_file_transfer_settings
+from ..downloads import RouterFileDownloadError, SCPFileDownloader, load_file_transfer_settings, resolve_scp_private_key_path
 from ..filters import apply_jq_filter
 from ..server_helpers import (
     build_equality_queries,
@@ -271,8 +271,20 @@ def _scp_config_status(client: RouterOSClient) -> dict[str, Any]:
     scp_password = os.getenv("MIKROTIK_SCP_PASSWORD")
     api_user = os.getenv("MIKROTIK_USER")
     api_password = os.getenv("MIKROTIK_PASSWORD")
+    try:
+        scp_private_key = resolve_scp_private_key_path()
+    except RuntimeError:
+        scp_private_key = None
+    auth_mode = None
+    if (scp_user or api_user) and scp_private_key:
+        auth_mode = "key"
+    elif (scp_user or api_user) and (scp_password or api_password):
+        auth_mode = "password"
+
     return {
-        "scp_credentials_configured": bool((scp_user and scp_password) or (api_user and api_password)),
+        "scp_credentials_configured": bool((scp_user or api_user) and (scp_private_key or scp_password or api_password)),
+        "scp_auth_mode": auth_mode,
+        "scp_key_path": scp_private_key,
         "scp_host_override": bool(os.getenv("MIKROTIK_SCP_HOST")),
         "scp_port_override": bool(os.getenv("MIKROTIK_SCP_PORT")),
         "resolved_host": os.getenv("MIKROTIK_SCP_HOST") or client.host,
@@ -292,7 +304,9 @@ def _classify_api_error(exc: Exception) -> str:
 
 
 def _classify_scp_error(exc: Exception) -> str:
-    if isinstance(exc, RuntimeError) and "must be set before downloading files" in str(exc):
+    if isinstance(exc, RuntimeError) and (
+        "must be set before downloading files" in str(exc) or "SCP private key file" in str(exc)
+    ):
         return "scp.config_missing"
     message = str(exc).lower()
     if "authentication failed" in message or "auth" in message:

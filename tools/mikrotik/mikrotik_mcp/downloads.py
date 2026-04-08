@@ -21,6 +21,8 @@ from typing import Protocol
 
 import paramiko
 
+from .server_helpers import workspace_root
+
 
 class RouterFileDownloadError(RuntimeError):
     pass
@@ -30,7 +32,9 @@ class RouterFileDownloadError(RuntimeError):
 class FileTransferSettings:
     host: str
     username: str
-    password: str
+    password: str | None = None
+    private_key: str | None = None
+    key_passphrase: str | None = None
     port: int = 22
     timeout: float = 30.0
 
@@ -98,12 +102,21 @@ class SCPFileDownloader:
     def _connect(self) -> paramiko.SSHClient:
         ssh_client = paramiko.SSHClient()
         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        connect_kwargs: dict[str, object] = {
+            "hostname": self.settings.host,
+            "port": self.settings.port,
+            "username": self.settings.username,
+            "timeout": self.settings.timeout,
+        }
+        if self.settings.private_key:
+            connect_kwargs["key_filename"] = self.settings.private_key
+            if self.settings.key_passphrase:
+                connect_kwargs["passphrase"] = self.settings.key_passphrase
+        elif self.settings.password:
+            connect_kwargs["password"] = self.settings.password
+
         ssh_client.connect(
-            hostname=self.settings.host,
-            port=self.settings.port,
-            username=self.settings.username,
-            password=self.settings.password,
-            timeout=self.settings.timeout,
+            **connect_kwargs,
         )
         return ssh_client
 
@@ -113,19 +126,39 @@ class SCPFileDownloader:
 
 def load_file_transfer_settings(host: str) -> FileTransferSettings:
     username = os.getenv("MIKROTIK_SCP_USER") or os.getenv("MIKROTIK_USER")
-    password = os.getenv("MIKROTIK_SCP_PASSWORD") or os.getenv("MIKROTIK_PASSWORD")
-    if not username or not password:
+    private_key = resolve_scp_private_key_path()
+    password = None if private_key else (os.getenv("MIKROTIK_SCP_PASSWORD") or os.getenv("MIKROTIK_PASSWORD"))
+    if not username or (not private_key and not password):
         raise RuntimeError(
-            "MIKROTIK_SCP_USER/MIKROTIK_SCP_PASSWORD or MIKROTIK_USER/MIKROTIK_PASSWORD must be set before downloading files"
+            "MIKROTIK_SCP_USER plus either MIKROTIK_SCP_PRIVATE_KEY, MIKROTIK_SCP_PASSWORD, or MIKROTIK_PASSWORD must be set before downloading files"
         )
 
     return FileTransferSettings(
         host=os.getenv("MIKROTIK_SCP_HOST") or host,
         username=username,
         password=password,
+        private_key=private_key,
+        key_passphrase=os.getenv("MIKROTIK_SCP_KEY_PASSPHRASE"),
         port=int(os.getenv("MIKROTIK_SCP_PORT") or 22),
         timeout=float(os.getenv("MIKROTIK_SCP_TIMEOUT") or 30.0),
     )
+
+
+def resolve_scp_private_key_path() -> str | None:
+    configured_path = os.getenv("MIKROTIK_SCP_PRIVATE_KEY")
+    if configured_path:
+        resolved_path = _resolve_local_path(configured_path)
+        if not resolved_path.is_file():
+            raise RuntimeError(f"SCP private key file '{resolved_path}' does not exist")
+        return str(resolved_path)
+    return None
+
+
+def _resolve_local_path(path: str) -> Path:
+    candidate = Path(path).expanduser()
+    if candidate.is_absolute():
+        return candidate
+    return workspace_root() / candidate
 
 
 def _normalize_router_path(router_path: str) -> str:

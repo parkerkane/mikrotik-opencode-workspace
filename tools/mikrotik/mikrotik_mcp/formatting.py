@@ -200,6 +200,8 @@ def format_healthcheck_result(record: dict[str, Any]) -> CallToolResult:
         "scp-listing-count": scp_probe.get("listing_count"),
         "config-api-credentials": config.get("api_credentials_configured"),
         "config-scp-credentials": config.get("scp_credentials_configured"),
+        "config-scp-auth-mode": config.get("scp_auth_mode"),
+        "config-scp-key-path": config.get("scp_key_path"),
         "config-scp-host-override": config.get("scp_host_override"),
         "config-resolved-scp-host": config.get("resolved_host"),
     }
@@ -237,6 +239,8 @@ def format_healthcheck_result(record: dict[str, Any]) -> CallToolResult:
                 "scp-listing-count",
                 "config-api-credentials",
                 "config-scp-credentials",
+                "config-scp-auth-mode",
+                "config-scp-key-path",
                 "config-scp-host-override",
                 "config-resolved-scp-host",
             ),

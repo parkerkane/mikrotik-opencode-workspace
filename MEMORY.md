@@ -15,6 +15,8 @@ Shared durable project context intended to be safe to keep in git.
 - Startup loads `.env` from the workspace root.
 - Required env vars: `MIKROTIK_USER`, `MIKROTIK_PASSWORD`.
 - Optional transport env vars: `MIKROTIK_API_SSL`, `MIKROTIK_API_PORT`, `MIKROTIK_TLS_VERIFY`.
+- SCP key auth requires an explicit `MIKROTIK_SCP_PRIVATE_KEY`; otherwise SCP falls back to password env vars.
+- SCP key passphrases can be provided with `MIKROTIK_SCP_KEY_PASSPHRASE`.
 - TLS defaults to enabled; default port is `8729` when SSL is on, else `8728`.
 
 ## Operations
