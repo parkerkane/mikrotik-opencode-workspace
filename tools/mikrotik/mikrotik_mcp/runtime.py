@@ -118,24 +118,15 @@ def startup_passwordless_state() -> dict[str, str] | None:
 
 def resolve_startup_api_password(host: str, *, username: str) -> str:
     fingerprint = os.getenv("MIKROTIK_SCP_HOST_FINGERPRINT_SHA256")
-    fallback_password = os.getenv("MIKROTIK_PASSWORD")
     if not fingerprint:
-        set_startup_passwordless_state(
-            status="skipped",
-            code="passwordless.fingerprint_missing",
-            message="SSH host fingerprint verification is not configured; startup password rotation was skipped",
+        raise RuntimeError(
+            "MIKROTIK_SCP_HOST_FINGERPRINT_SHA256 must be set before starting passwordless API rotation"
         )
-        return fallback_password or ""
 
     try:
         password = rotate_startup_api_password(host, username=username)
     except Exception as exc:
-        set_startup_passwordless_state(
-            status="failed",
-            code="passwordless.startup_failed",
-            message=f"Startup password rotation failed: {exc}",
-        )
-        return fallback_password or ""
+        raise RuntimeError(f"Startup password rotation failed: {exc}") from exc
 
     clear_startup_passwordless_state()
     return password

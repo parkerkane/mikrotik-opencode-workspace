@@ -20,7 +20,7 @@ Shared durable project context intended to be safe to keep in git.
 - Optional transport env vars: `MIKROTIK_API_SSL`, `MIKROTIK_API_PORT`, `MIKROTIK_TLS_VERIFY`.
 - SCP key auth requires an explicit `MIKROTIK_SCP_PRIVATE_KEY`; otherwise SCP falls back to password env vars.
 - SCP key passphrases can be provided with `MIKROTIK_SCP_KEY_PASSPHRASE`.
-- SSH/SCP trust uses optional `MIKROTIK_SCP_HOST_FINGERPRINT_SHA256` in `SHA256:...` format; when unset, healthcheck warns and startup password rotation is skipped while generic SCP diagnostics still run.
+- SSH/SCP trust uses `MIKROTIK_SCP_HOST_FINGERPRINT_SHA256` in `SHA256:...` format; it is optional for generic diagnostics but required when passwordless startup rotation is enabled.
 - TLS defaults to enabled; default port is `8729` when SSL is on, else `8728`.
 
 ## Operations

@@ -93,7 +93,7 @@ Passwordless mode needs `MIKROTIK_USER`, `MIKROTIK_API_PASSWORDLESS_ENABLED=true
 | `MIKROTIK_SCP_PASSWORD` | optional | unused | `MIKROTIK_PASSWORD` | SSH/SFTP password fallback |
 | `MIKROTIK_SCP_PRIVATE_KEY` | optional | required | none | SSH private key for startup rotation |
 | `MIKROTIK_SCP_KEY_PASSPHRASE` | optional | optional | none | SSH private key passphrase |
-| `MIKROTIK_SCP_HOST_FINGERPRINT_SHA256` | recommended | recommended | none | Expected SSH host key fingerprint in `SHA256:...` format for SSH trust verification |
+| `MIKROTIK_SCP_HOST_FINGERPRINT_SHA256` | optional | required | none | Expected SSH host key fingerprint in `SHA256:...` format for SSH trust verification |
 | `MIKROTIK_SCP_PORT` | optional | optional | `22` | SSH/SFTP port override |
 | `MIKROTIK_SCP_TIMEOUT` | optional | optional | `30.0` | SSH/SFTP timeout in seconds |
 
@@ -103,8 +103,8 @@ Notes:
 - When `certs/` exists, `.pem`, `.crt`, and `.cer` files in it are loaded into the TLS trust store except names ending with `.disabled`.
 - `certs/` is for local PEM CA certificates only; only `certs/README.md` is tracked by git.
 - SSH/SCP host fingerprint verification is enabled when `MIKROTIK_SCP_HOST_FINGERPRINT_SHA256` is set; mismatches are rejected.
-- If `MIKROTIK_SCP_HOST_FINGERPRINT_SHA256` is unset, generic SSH/SCP health probes still work without verification, healthcheck warns that verification is disabled, and passwordless startup rotation is skipped.
-- Passwordless startup rotation currently requires SSH key auth and fails startup if the password rotation step fails.
+- If `MIKROTIK_SCP_HOST_FINGERPRINT_SHA256` is unset, generic SSH/SCP health probes still work without verification and healthcheck warns that verification is disabled.
+- Passwordless startup rotation requires SSH key auth and `MIKROTIK_SCP_HOST_FINGERPRINT_SHA256`; startup fails if the fingerprint is missing, invalid, mismatched, or if the password rotation step fails.
 
 Example `opencode.json` with per-router MCP environment overrides:
 
