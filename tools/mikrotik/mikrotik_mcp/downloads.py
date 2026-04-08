@@ -14,7 +14,10 @@
 
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass
+import hashlib
+import socket
 from pathlib import Path
 import os
 import shlex
@@ -33,6 +36,10 @@ class RouterSSHCommandError(RuntimeError):
     pass
 
 
+class RouterSSHProbeError(RuntimeError):
+    pass
+
+
 @dataclass(slots=True)
 class FileTransferSettings:
     host: str
@@ -40,6 +47,7 @@ class FileTransferSettings:
     password: str | None = None
     private_key: str | None = None
     key_passphrase: str | None = None
+    ssh_host_fingerprint_sha256: str | None = None
     port: int = 22
     timeout: float = 30.0
 
@@ -115,23 +123,28 @@ def load_file_transfer_settings(host: str) -> FileTransferSettings:
     username = os.getenv("MIKROTIK_SCP_USER") or os.getenv("MIKROTIK_USER")
     private_key = resolve_scp_private_key_path()
     password = None if private_key else (os.getenv("MIKROTIK_SCP_PASSWORD") or os.getenv("MIKROTIK_PASSWORD"))
+    ssh_host_fingerprint_sha256 = os.getenv("MIKROTIK_SCP_HOST_FINGERPRINT_SHA256")
     if not username or (not private_key and not password):
         raise RuntimeError(
             "MIKROTIK_SCP_USER plus either MIKROTIK_SCP_PRIVATE_KEY, MIKROTIK_SCP_PASSWORD, or MIKROTIK_PASSWORD must be set before downloading files"
         )
-
     return FileTransferSettings(
         host=os.getenv("MIKROTIK_SCP_HOST") or host,
         username=username,
         password=password,
         private_key=private_key,
         key_passphrase=os.getenv("MIKROTIK_SCP_KEY_PASSPHRASE"),
+        ssh_host_fingerprint_sha256=(
+            normalize_ssh_sha256_fingerprint(ssh_host_fingerprint_sha256) if ssh_host_fingerprint_sha256 else None
+        ),
         port=int(os.getenv("MIKROTIK_SCP_PORT") or 22),
         timeout=float(os.getenv("MIKROTIK_SCP_TIMEOUT") or 30.0),
     )
 
 
 def load_password_rotation_settings(host: str) -> FileTransferSettings:
+    if not os.getenv("MIKROTIK_SCP_PRIVATE_KEY"):
+        raise RuntimeError("MIKROTIK_SCP_PRIVATE_KEY must be set when API passwordless startup rotation is enabled")
     settings = load_file_transfer_settings(host)
     if not settings.private_key:
         raise RuntimeError("MIKROTIK_SCP_PRIVATE_KEY must be set when API passwordless startup rotation is enabled")
@@ -204,7 +217,10 @@ def _normalize_router_path(router_path: str) -> str:
 
 def open_ssh_client(settings: FileTransferSettings) -> paramiko.SSHClient:
     ssh_client = paramiko.SSHClient()
-    ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    if settings.ssh_host_fingerprint_sha256:
+        ssh_client.set_missing_host_key_policy(SSHSha256FingerprintPolicy(settings.host, settings.ssh_host_fingerprint_sha256))
+    else:
+        ssh_client.set_missing_host_key_policy(PermissiveMissingHostKeyPolicy())
     connect_kwargs: dict[str, object] = {
         "hostname": settings.host,
         "port": settings.port,
@@ -220,6 +236,31 @@ def open_ssh_client(settings: FileTransferSettings) -> paramiko.SSHClient:
 
     ssh_client.connect(**connect_kwargs)
     return ssh_client
+
+
+def probe_ssh_server_fingerprint(*, host: str, port: int, timeout: float) -> dict[str, object]:
+    raw_socket = None
+    transport = None
+    try:
+        raw_socket = socket.create_connection((host, port), timeout=timeout)
+        transport = paramiko.Transport(raw_socket)
+        transport.banner_timeout = timeout
+        transport.handshake_timeout = timeout
+        transport.start_client(timeout=timeout)
+        server_key = transport.get_remote_server_key()
+        return {
+            "host": host,
+            "port": port,
+            "key_type": server_key.get_name(),
+            "fingerprint_sha256": ssh_host_key_sha256(server_key),
+        }
+    except (paramiko.SSHException, OSError) as exc:
+        raise RouterSSHProbeError(f"Failed to fetch SSH server fingerprint from {host}:{port}: {exc}") from exc
+    finally:
+        if transport is not None:
+            transport.close()
+        if raw_socket is not None:
+            raw_socket.close()
 
 
 def run_ssh_command(ssh_client: paramiko.SSHClient, command: str, *, timeout: float) -> str:
@@ -272,3 +313,55 @@ def _parse_count_output(value: str) -> int:
         return int(normalized)
     except ValueError as exc:
         raise RouterSSHCommandError(f"RouterOS readiness probe returned an unexpected response: {normalized}") from exc
+
+
+class SSHSha256FingerprintPolicy(paramiko.MissingHostKeyPolicy):
+    def __init__(self, hostname: str, expected_fingerprint: str | None) -> None:
+        if not expected_fingerprint:
+            raise ValueError("MIKROTIK_SCP_HOST_FINGERPRINT_SHA256 must be set before opening SSH or SCP connections")
+        self.hostname = hostname
+        self.expected_fingerprint = normalize_ssh_sha256_fingerprint(expected_fingerprint)
+
+    def missing_host_key(self, client: paramiko.SSHClient, hostname: str, key: paramiko.PKey) -> None:
+        presented_fingerprint = ssh_host_key_sha256(key)
+        if presented_fingerprint != self.expected_fingerprint:
+            raise paramiko.SSHException(
+                f"SSH host key fingerprint mismatch for {hostname}: expected {self.expected_fingerprint}, got {presented_fingerprint}"
+            )
+
+
+class PermissiveMissingHostKeyPolicy(paramiko.MissingHostKeyPolicy):
+    def missing_host_key(self, client: paramiko.SSHClient, hostname: str, key: paramiko.PKey) -> None:
+        return None
+
+
+def ssh_host_key_sha256(key: paramiko.PKey) -> str:
+    digest = hashlib.sha256(key.asbytes()).digest()
+    encoded = base64.b64encode(digest).decode("ascii").rstrip("=")
+    return f"SHA256:{encoded}"
+
+
+def normalize_ssh_sha256_fingerprint(value: str) -> str:
+    normalized = value.strip()
+    if not normalized:
+        raise ValueError("MIKROTIK_SCP_HOST_FINGERPRINT_SHA256 must not be empty")
+
+    if normalized.lower().startswith("sha256:"):
+        fingerprint_body = normalized[7:]
+    else:
+        fingerprint_body = normalized
+
+    if not fingerprint_body:
+        raise ValueError("MIKROTIK_SCP_HOST_FINGERPRINT_SHA256 must include a SHA256 fingerprint value")
+    if any(character.isspace() for character in fingerprint_body):
+        raise ValueError("MIKROTIK_SCP_HOST_FINGERPRINT_SHA256 must not contain whitespace")
+
+    padded = fingerprint_body + "=" * (-len(fingerprint_body) % 4)
+    try:
+        decoded = base64.b64decode(padded, validate=True)
+    except ValueError as exc:
+        raise ValueError("MIKROTIK_SCP_HOST_FINGERPRINT_SHA256 must be an OpenSSH-style SHA256 fingerprint") from exc
+    if len(decoded) != hashlib.sha256().digest_size:
+        raise ValueError("MIKROTIK_SCP_HOST_FINGERPRINT_SHA256 must decode to a SHA256 digest")
+    encoded = base64.b64encode(decoded).decode("ascii").rstrip("=")
+    return f"SHA256:{encoded}"

@@ -24,9 +24,11 @@ from ..client import RouterOSAuthError, RouterOSClient, RouterOSFatalError, Rout
 from ..downloads import (
     RouterFileDownloadError,
     RouterSSHCommandError,
+    RouterSSHProbeError,
     SCPFileDownloader,
     check_routeros_password_rotation_ready,
     load_file_transfer_settings,
+    probe_ssh_server_fingerprint,
     resolve_scp_private_key_path,
 )
 from ..filters import apply_jq_filter
@@ -278,6 +280,7 @@ def _api_config_status(client: RouterOSClient) -> dict[str, Any]:
 def _scp_config_status(client: RouterOSClient) -> dict[str, Any]:
     scp_user = os.getenv("MIKROTIK_SCP_USER")
     scp_password = os.getenv("MIKROTIK_SCP_PASSWORD")
+    scp_host_fingerprint_sha256 = os.getenv("MIKROTIK_SCP_HOST_FINGERPRINT_SHA256")
     api_user = os.getenv("MIKROTIK_USER")
     api_password = os.getenv("MIKROTIK_PASSWORD")
     try:
@@ -294,6 +297,10 @@ def _scp_config_status(client: RouterOSClient) -> dict[str, Any]:
         "scp_credentials_configured": bool((scp_user or api_user) and (scp_private_key or scp_password or api_password)),
         "scp_auth_mode": auth_mode,
         "scp_key_path": scp_private_key,
+        "scp_host_fingerprint_verification": bool(scp_host_fingerprint_sha256),
+        "scp_host_fingerprint_warning": (
+            None if scp_host_fingerprint_sha256 else "SSH host fingerprint verification is disabled"
+        ),
         "scp_host_override": bool(os.getenv("MIKROTIK_SCP_HOST")),
         "scp_port_override": bool(os.getenv("MIKROTIK_SCP_PORT")),
         "resolved_host": os.getenv("MIKROTIK_SCP_HOST") or client.host,
@@ -314,7 +321,9 @@ def _classify_api_error(exc: Exception) -> str:
 
 def _classify_scp_error(exc: Exception) -> str:
     if isinstance(exc, RuntimeError) and (
-        "must be set before downloading files" in str(exc) or "SCP private key file" in str(exc)
+        "must be set before downloading files" in str(exc)
+        or "SCP private key file" in str(exc)
+        or "MIKROTIK_SCP_HOST_FINGERPRINT_SHA256" in str(exc)
     ):
         return "scp.config_missing"
     message = str(exc).lower()
@@ -359,6 +368,18 @@ def _passwordless_health_status(client: RouterOSClient, config: dict[str, Any], 
             "duration_ms": 0,
         }
 
+    startup_state = _startup_passwordless_state()
+    if startup_state is not None:
+        return {
+            "ok": False,
+            "status": startup_state["status"],
+            "code": startup_state["code"],
+            "message": startup_state["message"],
+            "host": config.get("resolved_host") or client.host,
+            "port": int(os.getenv("MIKROTIK_SCP_PORT") or 22),
+            "duration_ms": 0,
+        }
+
     started_at = perf_counter()
     target_user = os.getenv("MIKROTIK_USER") or client.username
     try:
@@ -387,6 +408,36 @@ def _passwordless_health_status(client: RouterOSClient, config: dict[str, Any], 
         }
     result["duration_ms"] = _elapsed_ms(started_at)
     return result
+
+
+def _startup_passwordless_state() -> dict[str, str] | None:
+    status = os.getenv("MIKROTIK_STARTUP_PASSWORDLESS_STATUS")
+    code = os.getenv("MIKROTIK_STARTUP_PASSWORDLESS_CODE")
+    message = os.getenv("MIKROTIK_STARTUP_PASSWORDLESS_MESSAGE")
+    if not status or not code or not message:
+        return None
+    return {
+        "status": status,
+        "code": code,
+        "message": message,
+    }
+
+
+def _probe_ssh_server_identity(*, host: str, port: int, timeout: float) -> dict[str, Any]:
+    try:
+        probe = probe_ssh_server_fingerprint(host=host, port=port, timeout=timeout)
+        return {
+            "status": "ok",
+            "message": f"SSH server fingerprint probe succeeded for {host}:{port}",
+            **probe,
+        }
+    except RouterSSHProbeError as exc:
+        return {
+            "status": "failed",
+            "message": str(exc),
+            "host": host,
+            "port": port,
+        }
 
 
 def healthcheck_impl(client: RouterOSClient) -> dict[str, Any]:
@@ -426,9 +477,15 @@ def healthcheck_impl(client: RouterOSClient) -> dict[str, Any]:
     api_result["duration_ms"] = _elapsed_ms(api_started_at)
 
     settings = None
+    scp_host = os.getenv("MIKROTIK_SCP_HOST") or client.host
+    scp_port = int(os.getenv("MIKROTIK_SCP_PORT") or 22)
+    scp_timeout = float(os.getenv("MIKROTIK_SCP_TIMEOUT") or 30.0)
     scp_started_at = perf_counter()
     try:
         settings = load_file_transfer_settings(client.host)
+        scp_host = settings.host
+        scp_port = settings.port
+        scp_timeout = getattr(settings, "timeout", scp_timeout)
         scp_probe = SCPFileDownloader(settings).check_connection()
         scp_result: dict[str, Any] = {
             "ok": True,
@@ -453,6 +510,14 @@ def healthcheck_impl(client: RouterOSClient) -> dict[str, Any]:
                     "port": settings.port,
                 }
             )
+        elif "host" not in scp_result:
+            scp_result.update(
+                {
+                    "host": scp_host,
+                    "port": scp_port,
+                }
+            )
+    scp_result["server_identity"] = _probe_ssh_server_identity(host=scp_host, port=scp_port, timeout=scp_timeout)
     scp_result["duration_ms"] = _elapsed_ms(scp_started_at)
 
     passwordless_result = _passwordless_health_status(client, config, scp_result)

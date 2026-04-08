@@ -48,6 +48,7 @@ MIKROTIK_TLS_VERIFY=true
 MIKROTIK_SCP_HOST=
 MIKROTIK_SCP_USER=
 MIKROTIK_SCP_PASSWORD=
+MIKROTIK_SCP_HOST_FINGERPRINT_SHA256=
 MIKROTIK_SCP_PORT=22
 MIKROTIK_SCP_TIMEOUT=30.0
 ```
@@ -67,6 +68,7 @@ MIKROTIK_SCP_HOST=
 MIKROTIK_SCP_USER=admin
 MIKROTIK_SCP_PRIVATE_KEY=certs/router-key
 MIKROTIK_SCP_KEY_PASSPHRASE=
+MIKROTIK_SCP_HOST_FINGERPRINT_SHA256=
 MIKROTIK_SCP_PORT=22
 MIKROTIK_SCP_TIMEOUT=30.0
 ```
@@ -91,6 +93,7 @@ Passwordless mode needs `MIKROTIK_USER`, `MIKROTIK_API_PASSWORDLESS_ENABLED=true
 | `MIKROTIK_SCP_PASSWORD` | optional | unused | `MIKROTIK_PASSWORD` | SSH/SFTP password fallback |
 | `MIKROTIK_SCP_PRIVATE_KEY` | optional | required | none | SSH private key for startup rotation |
 | `MIKROTIK_SCP_KEY_PASSPHRASE` | optional | optional | none | SSH private key passphrase |
+| `MIKROTIK_SCP_HOST_FINGERPRINT_SHA256` | recommended | recommended | none | Expected SSH host key fingerprint in `SHA256:...` format for SSH trust verification |
 | `MIKROTIK_SCP_PORT` | optional | optional | `22` | SSH/SFTP port override |
 | `MIKROTIK_SCP_TIMEOUT` | optional | optional | `30.0` | SSH/SFTP timeout in seconds |
 
@@ -99,7 +102,39 @@ Notes:
 - TLS is enabled by default.
 - When `certs/` exists, `.pem`, `.crt`, and `.cer` files in it are loaded into the TLS trust store except names ending with `.disabled`.
 - `certs/` is for local PEM CA certificates only; only `certs/README.md` is tracked by git.
+- SSH/SCP host fingerprint verification is enabled when `MIKROTIK_SCP_HOST_FINGERPRINT_SHA256` is set; mismatches are rejected.
+- If `MIKROTIK_SCP_HOST_FINGERPRINT_SHA256` is unset, generic SSH/SCP health probes still work without verification, healthcheck warns that verification is disabled, and passwordless startup rotation is skipped.
 - Passwordless startup rotation currently requires SSH key auth and fails startup if the password rotation step fails.
+
+Example `opencode.json` with per-router MCP environment overrides:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "mikrotik_lab": {
+      "type": "local",
+      "command": ["python", "tools/mikrotik/main.py", "lab-router.local"],
+      "environment": {
+        "MIKROTIK_USER": "admin",
+        "MIKROTIK_PASSWORD": "{env:MIKROTIK_LAB_PASSWORD}",
+        "MIKROTIK_SCP_HOST_FINGERPRINT_SHA256": "{env:MIKROTIK_LAB_SSH_HOST_FINGERPRINT_SHA256}"
+      },
+      "enabled": true
+    },
+    "mikrotik_edge": {
+      "type": "local",
+      "command": ["python", "tools/mikrotik/main.py", "edge-router.local"],
+      "environment": {
+        "MIKROTIK_USER": "admin",
+        "MIKROTIK_PASSWORD": "{env:MIKROTIK_EDGE_PASSWORD}",
+        "MIKROTIK_SCP_HOST_FINGERPRINT_SHA256": "{env:MIKROTIK_EDGE_SSH_HOST_FINGERPRINT_SHA256}"
+      },
+      "enabled": true
+    }
+  }
+}
+```
 
 ## Setup
 

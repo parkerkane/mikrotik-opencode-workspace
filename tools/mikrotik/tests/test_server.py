@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, Mock
 import pytest
 
 from mikrotik_mcp.app import create_app
+from mikrotik_mcp.formatting import format_healthcheck_result
 from mikrotik_mcp import runtime
 from mikrotik_mcp.client import ListenResult, RouterOSError
 from mikrotik_mcp.downloads import RouterFileDownloadError
@@ -203,6 +204,7 @@ async def test_app_healthcheck_returns_api_and_scp_statuses(socket_enabled, monk
     monkeypatch.setenv("MIKROTIK_PASSWORD", "api-pass")
     monkeypatch.setenv("MIKROTIK_SCP_USER", "scp-user")
     monkeypatch.delenv("MIKROTIK_SCP_PASSWORD", raising=False)
+    monkeypatch.setenv("MIKROTIK_SCP_HOST_FINGERPRINT_SHA256", "SHA256:test-host-key")
     monkeypatch.setenv("MIKROTIK_SCP_HOST", "files.router.test")
 
     class Settings:
@@ -218,6 +220,16 @@ async def test_app_healthcheck_returns_api_and_scp_statuses(socket_enabled, monk
     }
     monkeypatch.setattr(core, "load_file_transfer_settings", lambda host: Settings())
     monkeypatch.setattr(core, "SCPFileDownloader", lambda settings: downloader)
+    monkeypatch.setattr(
+        core,
+        "probe_ssh_server_fingerprint",
+        lambda host, port, timeout: {
+            "host": host,
+            "port": port,
+            "key_type": "ssh-ed25519",
+            "fingerprint_sha256": "SHA256:server-fingerprint",
+        },
+    )
     monkeypatch.setattr(core, "check_routeros_password_rotation_ready", Mock())
 
     result = await create_app(client).call_tool("healthcheck", {})
@@ -235,6 +247,8 @@ async def test_app_healthcheck_returns_api_and_scp_statuses(socket_enabled, monk
         "scp_credentials_configured": True,
         "scp_auth_mode": "password",
         "scp_key_path": None,
+        "scp_host_fingerprint_verification": True,
+        "scp_host_fingerprint_warning": None,
         "scp_host_override": True,
         "scp_port_override": False,
         "resolved_host": "files.router.test",
@@ -276,6 +290,14 @@ async def test_app_healthcheck_returns_api_and_scp_statuses(socket_enabled, monk
             "listing_sample": ["backups", "flash"],
             "operation": "normalize+listdir_attr",
         },
+        "server_identity": {
+            "status": "ok",
+            "message": "SSH server fingerprint probe succeeded for files.router.test:21",
+            "host": "files.router.test",
+            "port": 21,
+            "key_type": "ssh-ed25519",
+            "fingerprint_sha256": "SHA256:server-fingerprint",
+        },
         "duration_ms": result.structuredContent["scp"]["duration_ms"],
     }
     assert result.structuredContent["passwordless"] == {
@@ -298,10 +320,13 @@ async def test_app_healthcheck_returns_api_and_scp_statuses(socket_enabled, monk
     assert "| api-cert-not-after | Apr  3 15:39:31 2036 GMT |" in result.content[0].text
     assert "| scp-status | ok |" in result.content[0].text
     assert "| scp-probe | normalize+listdir_attr |" in result.content[0].text
+    assert "| scp-server-key-type | ssh-ed25519 |" in result.content[0].text
+    assert "| scp-server-fingerprint-sha256 | SHA256:server-fingerprint |" in result.content[0].text
     assert "| passwordless-status | skipped |" in result.content[0].text
     assert "| passwordless-code | passwordless.disabled |" in result.content[0].text
     assert "| config-api-passwordless | no |" in result.content[0].text
     assert "| config-scp-auth-mode | password |" in result.content[0].text
+    assert "| config-scp-host-fingerprint-warning | - |" in result.content[0].text
     downloader.check_connection.assert_called_once_with()
 
 
@@ -744,6 +769,7 @@ def test_healthcheck_reports_separate_api_and_scp_statuses(monkeypatch: pytest.M
     monkeypatch.setenv("MIKROTIK_PASSWORD", "api-pass")
     monkeypatch.setenv("MIKROTIK_SCP_USER", "scp-user")
     monkeypatch.delenv("MIKROTIK_SCP_PASSWORD", raising=False)
+    monkeypatch.setenv("MIKROTIK_SCP_HOST_FINGERPRINT_SHA256", "SHA256:test-host-key")
 
     class Settings:
         host = "files.router.test"
@@ -754,6 +780,16 @@ def test_healthcheck_reports_separate_api_and_scp_statuses(monkeypatch: pytest.M
 
     monkeypatch.setattr(core, "load_file_transfer_settings", lambda host: Settings())
     monkeypatch.setattr(core, "SCPFileDownloader", lambda settings: downloader)
+    monkeypatch.setattr(
+        core,
+        "probe_ssh_server_fingerprint",
+        lambda host, port, timeout: {
+            "host": host,
+            "port": port,
+            "key_type": "ssh-ed25519",
+            "fingerprint_sha256": "SHA256:actual-server-fingerprint",
+        },
+    )
     monkeypatch.setattr(core, "check_routeros_password_rotation_ready", Mock())
 
     result = healthcheck_impl(client)
@@ -765,6 +801,7 @@ def test_healthcheck_reports_separate_api_and_scp_statuses(monkeypatch: pytest.M
     assert result["config"]["api_passwordless_enabled"] is False
     assert result["config"]["scp_auth_mode"] == "password"
     assert result["config"]["scp_key_path"] is None
+    assert result["config"]["scp_host_fingerprint_verification"] is True
     assert result["api"]["ok"] is True
     assert result["api"]["code"] == "api.ok"
     assert "certificate" not in result["api"]
@@ -775,6 +812,14 @@ def test_healthcheck_reports_separate_api_and_scp_statuses(monkeypatch: pytest.M
         "message": "scp unavailable",
         "host": "files.router.test",
         "port": 21,
+        "server_identity": {
+            "status": "ok",
+            "message": "SSH server fingerprint probe succeeded for files.router.test:21",
+            "host": "files.router.test",
+            "port": 21,
+            "key_type": "ssh-ed25519",
+            "fingerprint_sha256": "SHA256:actual-server-fingerprint",
+        },
         "duration_ms": result["scp"]["duration_ms"],
     }
     assert result["passwordless"]["code"] == "passwordless.disabled"
@@ -793,6 +838,7 @@ def test_healthcheck_marks_api_failure_without_raising(monkeypatch: pytest.Monke
     monkeypatch.setenv("MIKROTIK_PASSWORD", "api-pass")
     monkeypatch.setenv("MIKROTIK_SCP_USER", "scp-user")
     monkeypatch.delenv("MIKROTIK_SCP_PASSWORD", raising=False)
+    monkeypatch.setenv("MIKROTIK_SCP_HOST_FINGERPRINT_SHA256", "SHA256:test-host-key")
 
     class Settings:
         host = "files.router.test"
@@ -807,6 +853,16 @@ def test_healthcheck_marks_api_failure_without_raising(monkeypatch: pytest.Monke
     }
     monkeypatch.setattr(core, "load_file_transfer_settings", lambda host: Settings())
     monkeypatch.setattr(core, "SCPFileDownloader", lambda settings: downloader)
+    monkeypatch.setattr(
+        core,
+        "probe_ssh_server_fingerprint",
+        lambda host, port, timeout: {
+            "host": host,
+            "port": port,
+            "key_type": "ssh-ed25519",
+            "fingerprint_sha256": "SHA256:actual-server-fingerprint",
+        },
+    )
     monkeypatch.setattr(core, "check_routeros_password_rotation_ready", Mock())
 
     result = healthcheck_impl(client)
@@ -816,6 +872,7 @@ def test_healthcheck_marks_api_failure_without_raising(monkeypatch: pytest.Monke
     assert result["config"]["api_passwordless_enabled"] is False
     assert result["config"]["scp_auth_mode"] == "password"
     assert result["config"]["scp_key_path"] is None
+    assert result["config"]["scp_host_fingerprint_verification"] is True
     assert result["api"] == {
         "ok": False,
         "status": "failed",
@@ -839,6 +896,14 @@ def test_healthcheck_marks_api_failure_without_raising(monkeypatch: pytest.Monke
             "listing_sample": ["backups"],
             "operation": "normalize+listdir_attr",
         },
+        "server_identity": {
+            "status": "ok",
+            "message": "SSH server fingerprint probe succeeded for files.router.test:21",
+            "host": "files.router.test",
+            "port": 21,
+            "key_type": "ssh-ed25519",
+            "fingerprint_sha256": "SHA256:actual-server-fingerprint",
+        },
         "duration_ms": result["scp"]["duration_ms"],
     }
     assert result["passwordless"]["code"] == "passwordless.disabled"
@@ -858,9 +923,20 @@ def test_healthcheck_classifies_api_auth_and_scp_config_failures(monkeypatch: py
     monkeypatch.setenv("MIKROTIK_PASSWORD", "bad")
     monkeypatch.delenv("MIKROTIK_SCP_USER", raising=False)
     monkeypatch.delenv("MIKROTIK_SCP_PASSWORD", raising=False)
+    monkeypatch.delenv("MIKROTIK_SCP_HOST_FINGERPRINT_SHA256", raising=False)
 
     monkeypatch.setattr(core, "load_file_transfer_settings", Mock(side_effect=RuntimeError("must be set before downloading files")))
     monkeypatch.setattr(core, "resolve_scp_private_key_path", Mock(side_effect=RuntimeError("missing key")))
+    monkeypatch.setattr(
+        core,
+        "probe_ssh_server_fingerprint",
+        lambda host, port, timeout: {
+            "host": host,
+            "port": port,
+            "key_type": "ssh-ed25519",
+            "fingerprint_sha256": "SHA256:server-fingerprint-without-local-config",
+        },
+    )
     monkeypatch.setattr(core, "check_routeros_password_rotation_ready", Mock())
 
     result = healthcheck_impl(client)
@@ -868,10 +944,207 @@ def test_healthcheck_classifies_api_auth_and_scp_config_failures(monkeypatch: py
     assert result["status"] == "failed"
     assert result["api"]["code"] == "api.auth_failed"
     assert result["scp"]["code"] == "scp.config_missing"
+    assert result["scp"]["server_identity"] == {
+        "status": "ok",
+        "message": "SSH server fingerprint probe succeeded for router.test:22",
+        "host": "router.test",
+        "port": 22,
+        "key_type": "ssh-ed25519",
+        "fingerprint_sha256": "SHA256:server-fingerprint-without-local-config",
+    }
     assert result["passwordless"]["code"] == "passwordless.disabled"
     assert result["config"]["api_passwordless_enabled"] is False
     assert result["config"]["scp_auth_mode"] == "password"
     assert result["config"]["scp_key_path"] is None
+    assert result["config"]["scp_host_fingerprint_verification"] is False
+    assert result["config"]["scp_host_fingerprint_warning"] == "SSH host fingerprint verification is disabled"
+
+
+def test_healthcheck_warns_and_skips_passwordless_when_fingerprint_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = Mock(host="router.test")
+    client.port = 8729
+    client.use_ssl = True
+    client.username = "api-user"
+    client.password = ""
+    client.print.side_effect = RouterOSError("RouterOS login failed")
+    monkeypatch.setenv("MIKROTIK_API_PASSWORDLESS_ENABLED", "true")
+    monkeypatch.setenv("MIKROTIK_USER", "api-user")
+    monkeypatch.delenv("MIKROTIK_PASSWORD", raising=False)
+    monkeypatch.setenv("MIKROTIK_SCP_USER", "api-user")
+    monkeypatch.setenv("MIKROTIK_SCP_PRIVATE_KEY", "/workspace/certs/router-key")
+    monkeypatch.delenv("MIKROTIK_SCP_HOST_FINGERPRINT_SHA256", raising=False)
+    monkeypatch.setenv("MIKROTIK_STARTUP_PASSWORDLESS_STATUS", "skipped")
+    monkeypatch.setenv("MIKROTIK_STARTUP_PASSWORDLESS_CODE", "passwordless.fingerprint_missing")
+    monkeypatch.setenv(
+        "MIKROTIK_STARTUP_PASSWORDLESS_MESSAGE",
+        "SSH host fingerprint verification is not configured; startup password rotation was skipped",
+    )
+    monkeypatch.setattr(core, "resolve_scp_private_key_path", lambda: "/workspace/certs/router-key")
+
+    class Settings:
+        host = "router.test"
+        port = 22
+        timeout = 5.0
+
+    downloader = Mock()
+    downloader.check_connection.return_value = {
+        "working_directory": "/",
+        "listing_count": 1,
+        "listing_sample": ["flash"],
+        "operation": "normalize+listdir_attr",
+    }
+    monkeypatch.setattr(core, "load_file_transfer_settings", lambda host: Settings())
+    monkeypatch.setattr(core, "SCPFileDownloader", lambda settings: downloader)
+    monkeypatch.setattr(
+        core,
+        "probe_ssh_server_fingerprint",
+        lambda host, port, timeout: {
+            "host": host,
+            "port": port,
+            "key_type": "ssh-rsa",
+            "fingerprint_sha256": "SHA256:actual-server-fingerprint",
+        },
+    )
+
+    result = healthcheck_impl(client)
+
+    assert result["status"] == "degraded"
+    assert result["config"]["scp_host_fingerprint_verification"] is False
+    assert result["config"]["scp_host_fingerprint_warning"] == "SSH host fingerprint verification is disabled"
+    assert result["scp"]["ok"] is True
+    assert result["scp"]["server_identity"] == {
+        "status": "ok",
+        "message": "SSH server fingerprint probe succeeded for router.test:22",
+        "host": "router.test",
+        "port": 22,
+        "key_type": "ssh-rsa",
+        "fingerprint_sha256": "SHA256:actual-server-fingerprint",
+    }
+    assert result["passwordless"] == {
+        "ok": False,
+        "status": "skipped",
+        "code": "passwordless.fingerprint_missing",
+        "message": "SSH host fingerprint verification is not configured; startup password rotation was skipped",
+        "host": "router.test",
+        "port": 22,
+        "duration_ms": 0,
+    }
+
+
+def test_healthcheck_reports_startup_passwordless_failure_without_blocking_boot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = Mock(host="router.test")
+    client.port = 8729
+    client.use_ssl = True
+    client.username = "api-user"
+    client.password = "fallback-secret"
+    client.print.return_value = [{"name": "lab-router"}]
+    monkeypatch.setenv("MIKROTIK_API_PASSWORDLESS_ENABLED", "true")
+    monkeypatch.setenv("MIKROTIK_USER", "api-user")
+    monkeypatch.setenv("MIKROTIK_PASSWORD", "fallback-secret")
+    monkeypatch.setenv("MIKROTIK_SCP_USER", "api-user")
+    monkeypatch.setenv("MIKROTIK_SCP_PRIVATE_KEY", "/workspace/certs/router-key")
+    monkeypatch.setenv("MIKROTIK_SCP_HOST_FINGERPRINT_SHA256", "SHA256:wrong")
+    monkeypatch.setenv("MIKROTIK_STARTUP_PASSWORDLESS_STATUS", "failed")
+    monkeypatch.setenv("MIKROTIK_STARTUP_PASSWORDLESS_CODE", "passwordless.startup_failed")
+    monkeypatch.setenv("MIKROTIK_STARTUP_PASSWORDLESS_MESSAGE", "Startup password rotation failed: fingerprint mismatch")
+    monkeypatch.setattr(core, "resolve_scp_private_key_path", lambda: "/workspace/certs/router-key")
+
+    class Settings:
+        host = "router.test"
+        port = 22
+        timeout = 5.0
+
+    downloader = Mock()
+    downloader.check_connection.side_effect = RouterFileDownloadError("SSH host key fingerprint mismatch")
+    monkeypatch.setattr(core, "load_file_transfer_settings", lambda host: Settings())
+    monkeypatch.setattr(core, "SCPFileDownloader", lambda settings: downloader)
+    monkeypatch.setattr(
+        core,
+        "probe_ssh_server_fingerprint",
+        lambda host, port, timeout: {
+            "host": host,
+            "port": port,
+            "key_type": "ssh-rsa",
+            "fingerprint_sha256": "SHA256:actual-server-fingerprint",
+        },
+    )
+
+    result = healthcheck_impl(client)
+
+    assert result["status"] == "degraded"
+    assert result["passwordless"] == {
+        "ok": False,
+        "status": "failed",
+        "code": "passwordless.startup_failed",
+        "message": "Startup password rotation failed: fingerprint mismatch",
+        "host": "router.test",
+        "port": 22,
+        "duration_ms": 0,
+    }
+    assert result["scp"]["server_identity"]["fingerprint_sha256"] == "SHA256:actual-server-fingerprint"
+
+
+def test_format_healthcheck_highlights_missing_fingerprint_root_cause() -> None:
+    result = format_healthcheck_result(
+        {
+            "success": False,
+            "status": "degraded",
+            "target_host": "router.local",
+            "config": {
+                "scp_host_fingerprint_warning": "SSH host fingerprint verification is disabled",
+            },
+            "api": {
+                "ok": False,
+                "status": "failed",
+                "code": "api.auth_failed",
+            },
+            "scp": {
+                "ok": True,
+                "status": "ok",
+                "server_identity": {
+                    "fingerprint_sha256": "SHA256:actual-server-fingerprint",
+                },
+            },
+            "passwordless": {
+                "ok": False,
+                "status": "skipped",
+                "code": "passwordless.fingerprint_missing",
+                "message": "SSH host fingerprint verification is not configured; startup password rotation was skipped",
+            },
+        }
+    )
+
+    assert (
+        "Likely issue: SSH host fingerprint verification is not configured, so startup password rotation was skipped and API login is using an invalid or empty password. Set MIKROTIK_SCP_HOST_FINGERPRINT_SHA256 to SHA256:actual-server-fingerprint."
+        in result.content[0].text
+    )
+
+
+def test_format_healthcheck_highlights_fingerprint_mismatch_root_cause() -> None:
+    result = format_healthcheck_result(
+        {
+            "success": False,
+            "status": "degraded",
+            "config": {},
+            "api": {"ok": True, "status": "ok", "code": "api.ok"},
+            "scp": {
+                "ok": False,
+                "status": "failed",
+                "message": "SSH host key fingerprint mismatch for router.local: expected SHA256:wrong, got SHA256:actual-server-fingerprint",
+                "server_identity": {
+                    "fingerprint_sha256": "SHA256:actual-server-fingerprint",
+                },
+            },
+            "passwordless": {"ok": True, "status": "skipped", "code": "passwordless.disabled"},
+        }
+    )
+
+    assert (
+        "Likely issue: The configured MIKROTIK_SCP_HOST_FINGERPRINT_SHA256 does not match the server; server fingerprint is SHA256:actual-server-fingerprint."
+        in result.content[0].text
+    )
 
 
 def test_healthcheck_reports_passwordless_mode_when_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -886,6 +1159,7 @@ def test_healthcheck_reports_passwordless_mode_when_enabled(monkeypatch: pytest.
     monkeypatch.delenv("MIKROTIK_PASSWORD", raising=False)
     monkeypatch.setenv("MIKROTIK_SCP_USER", "api-user")
     monkeypatch.setenv("MIKROTIK_SCP_PRIVATE_KEY", "/workspace/certs/router-key")
+    monkeypatch.setenv("MIKROTIK_SCP_HOST_FINGERPRINT_SHA256", "SHA256:test-host-key")
     monkeypatch.setattr(core, "resolve_scp_private_key_path", lambda: "/workspace/certs/router-key")
 
     class Settings:
@@ -903,6 +1177,16 @@ def test_healthcheck_reports_passwordless_mode_when_enabled(monkeypatch: pytest.
     monkeypatch.setattr(core, "SCPFileDownloader", lambda settings: downloader)
     monkeypatch.setattr(
         core,
+        "probe_ssh_server_fingerprint",
+        lambda host, port, timeout: {
+            "host": host,
+            "port": port,
+            "key_type": "ssh-ed25519",
+            "fingerprint_sha256": "SHA256:server-fingerprint",
+        },
+    )
+    monkeypatch.setattr(
+        core,
         "check_routeros_password_rotation_ready",
         lambda host, username: {
             "host": host,
@@ -917,6 +1201,7 @@ def test_healthcheck_reports_passwordless_mode_when_enabled(monkeypatch: pytest.
 
     assert result["config"]["api_passwordless_enabled"] is True
     assert result["config"]["scp_auth_mode"] == "key"
+    assert result["config"]["scp_host_fingerprint_verification"] is True
     assert result["passwordless"] == {
         "ok": True,
         "status": "ok",
@@ -947,6 +1232,7 @@ def test_healthcheck_marks_passwordless_failure_when_ssh_command_probe_fails(mon
     monkeypatch.setenv("MIKROTIK_USER", "api-user")
     monkeypatch.setenv("MIKROTIK_SCP_USER", "api-user")
     monkeypatch.setenv("MIKROTIK_SCP_PRIVATE_KEY", "/workspace/certs/router-key")
+    monkeypatch.setenv("MIKROTIK_SCP_HOST_FINGERPRINT_SHA256", "SHA256:test-host-key")
     monkeypatch.setattr(core, "resolve_scp_private_key_path", lambda: "/workspace/certs/router-key")
 
     class Settings:
@@ -964,6 +1250,16 @@ def test_healthcheck_marks_passwordless_failure_when_ssh_command_probe_fails(mon
     monkeypatch.setattr(core, "SCPFileDownloader", lambda settings: downloader)
     monkeypatch.setattr(
         core,
+        "probe_ssh_server_fingerprint",
+        lambda host, port, timeout: {
+            "host": host,
+            "port": port,
+            "key_type": "ssh-ed25519",
+            "fingerprint_sha256": "SHA256:server-fingerprint",
+        },
+    )
+    monkeypatch.setattr(
+        core,
         "check_routeros_password_rotation_ready",
         Mock(side_effect=core.RouterSSHCommandError("permission denied")),
     )
@@ -974,6 +1270,51 @@ def test_healthcheck_marks_passwordless_failure_when_ssh_command_probe_fails(mon
     assert result["status"] == "degraded"
     assert result["passwordless"]["code"] == "passwordless.exec_failed"
     assert result["passwordless"]["message"] == "permission denied"
+
+
+def test_healthcheck_reports_server_fingerprint_probe_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = Mock(host="router.test")
+    client.port = 8729
+    client.use_ssl = True
+    client.username = "api-user"
+    client.password = "api-pass"
+    client.print.return_value = [{"name": "lab-router"}]
+    monkeypatch.setenv("MIKROTIK_USER", "api-user")
+    monkeypatch.setenv("MIKROTIK_PASSWORD", "api-pass")
+    monkeypatch.setenv("MIKROTIK_SCP_USER", "scp-user")
+    monkeypatch.setenv("MIKROTIK_SCP_PASSWORD", "scp-pass")
+    monkeypatch.setenv("MIKROTIK_SCP_HOST_FINGERPRINT_SHA256", "SHA256:expected")
+
+    class Settings:
+        host = "files.router.test"
+        port = 22
+        timeout = 5.0
+
+    downloader = Mock()
+    downloader.check_connection.return_value = {
+        "working_directory": "/",
+        "listing_count": 1,
+        "listing_sample": ["backups"],
+        "operation": "normalize+listdir_attr",
+    }
+
+    monkeypatch.setattr(core, "load_file_transfer_settings", lambda host: Settings())
+    monkeypatch.setattr(core, "SCPFileDownloader", lambda settings: downloader)
+    monkeypatch.setattr(
+        core,
+        "probe_ssh_server_fingerprint",
+        Mock(side_effect=core.RouterSSHProbeError("Failed to fetch SSH server fingerprint from files.router.test:22: timed out")),
+    )
+    monkeypatch.setattr(core, "check_routeros_password_rotation_ready", Mock())
+
+    result = healthcheck_impl(client)
+
+    assert result["scp"]["server_identity"] == {
+        "status": "failed",
+        "message": "Failed to fetch SSH server fingerprint from files.router.test:22: timed out",
+        "host": "files.router.test",
+        "port": 22,
+    }
 
 
 def test_interface_monitor_returns_first_record() -> None:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from unittest.mock import Mock
 
 from mikrotik_mcp import runtime
 
@@ -27,6 +28,18 @@ def test_load_tls_ca_files_returns_empty_tuple_when_directory_missing(tmp_path, 
     assert runtime.load_tls_ca_files() == ()
 
 
+def test_clear_empty_mikrotik_env_vars_removes_only_empty_mikrotik_values(monkeypatch) -> None:
+    monkeypatch.setenv("MIKROTIK_USER", "")
+    monkeypatch.setenv("MIKROTIK_PASSWORD", "secret")
+    monkeypatch.setenv("UNRELATED_VAR", "")
+
+    runtime.clear_empty_mikrotik_env_vars()
+
+    assert "MIKROTIK_USER" not in runtime.os.environ
+    assert runtime.os.environ["MIKROTIK_PASSWORD"] == "secret"
+    assert runtime.os.environ["UNRELATED_VAR"] == ""
+
+
 def test_load_settings_passes_discovered_tls_ca_files(monkeypatch) -> None:
     monkeypatch.setenv("MIKROTIK_USER", "admin")
     monkeypatch.setenv("MIKROTIK_PASSWORD", "secret")
@@ -49,6 +62,7 @@ def test_load_settings_rotates_password_when_passwordless_enabled(monkeypatch) -
     monkeypatch.setenv("MIKROTIK_USER", "admin")
     monkeypatch.delenv("MIKROTIK_PASSWORD", raising=False)
     monkeypatch.setenv("MIKROTIK_API_PASSWORDLESS_ENABLED", "true")
+    monkeypatch.setenv("MIKROTIK_SCP_HOST_FINGERPRINT_SHA256", "SHA256:test-host-key")
     monkeypatch.setattr(runtime, "load_dotenv", lambda path: None)
     monkeypatch.setattr(runtime, "load_tls_ca_files", lambda: ())
     monkeypatch.setattr(runtime, "rotate_startup_api_password", lambda host, username: "rotated-secret")
@@ -57,6 +71,62 @@ def test_load_settings_rotates_password_when_passwordless_enabled(monkeypatch) -
 
     assert client.username == "admin"
     assert client.password == "rotated-secret"
+
+
+def test_load_settings_skips_password_rotation_when_fingerprint_missing_and_uses_fallback_password(monkeypatch) -> None:
+    monkeypatch.setenv("MIKROTIK_USER", "admin")
+    monkeypatch.setenv("MIKROTIK_PASSWORD", "fallback-secret")
+    monkeypatch.setenv("MIKROTIK_API_PASSWORDLESS_ENABLED", "true")
+    monkeypatch.delenv("MIKROTIK_SCP_HOST_FINGERPRINT_SHA256", raising=False)
+    monkeypatch.setattr(runtime, "load_dotenv", lambda path: None)
+    monkeypatch.setattr(runtime, "load_tls_ca_files", lambda: ())
+    monkeypatch.setattr(runtime, "rotate_startup_api_password", lambda host, username: "rotated-secret")
+
+    client = runtime.load_settings("router.test")
+
+    assert client.password == "fallback-secret"
+    assert runtime.startup_passwordless_state() == {
+        "status": "skipped",
+        "code": "passwordless.fingerprint_missing",
+        "message": "SSH host fingerprint verification is not configured; startup password rotation was skipped",
+    }
+
+
+def test_load_settings_skips_password_rotation_when_fingerprint_missing_without_fallback(monkeypatch) -> None:
+    monkeypatch.setenv("MIKROTIK_USER", "admin")
+    monkeypatch.delenv("MIKROTIK_PASSWORD", raising=False)
+    monkeypatch.setenv("MIKROTIK_API_PASSWORDLESS_ENABLED", "true")
+    monkeypatch.delenv("MIKROTIK_SCP_HOST_FINGERPRINT_SHA256", raising=False)
+    monkeypatch.setattr(runtime, "load_dotenv", lambda path: None)
+    monkeypatch.setattr(runtime, "load_tls_ca_files", lambda: ())
+
+    client = runtime.load_settings("router.test")
+
+    assert client.password == ""
+    assert runtime.startup_passwordless_state() == {
+        "status": "skipped",
+        "code": "passwordless.fingerprint_missing",
+        "message": "SSH host fingerprint verification is not configured; startup password rotation was skipped",
+    }
+
+
+def test_load_settings_keeps_running_when_startup_rotation_fails(monkeypatch) -> None:
+    monkeypatch.setenv("MIKROTIK_USER", "admin")
+    monkeypatch.setenv("MIKROTIK_PASSWORD", "fallback-secret")
+    monkeypatch.setenv("MIKROTIK_API_PASSWORDLESS_ENABLED", "true")
+    monkeypatch.setenv("MIKROTIK_SCP_HOST_FINGERPRINT_SHA256", "SHA256:test-host-key")
+    monkeypatch.setattr(runtime, "load_dotenv", lambda path: None)
+    monkeypatch.setattr(runtime, "load_tls_ca_files", lambda: ())
+    monkeypatch.setattr(runtime, "rotate_startup_api_password", Mock(side_effect=RuntimeError("fingerprint mismatch")))
+
+    client = runtime.load_settings("router.test")
+
+    assert client.password == "fallback-secret"
+    assert runtime.startup_passwordless_state() == {
+        "status": "failed",
+        "code": "passwordless.startup_failed",
+        "message": "Startup password rotation failed: fingerprint mismatch",
+    }
 
 
 def test_load_settings_requires_password_when_passwordless_disabled(monkeypatch) -> None:

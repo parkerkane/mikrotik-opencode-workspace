@@ -1,18 +1,31 @@
 from __future__ import annotations
 
+import base64
+import hashlib
 from pathlib import Path
 
+import paramiko
 import pytest
 
 from mikrotik_mcp.downloads import (
+    PermissiveMissingHostKeyPolicy,
     SCPFileDownloader,
     check_routeros_password_rotation_ready,
     RouterFileDownloadError,
     RouterSSHCommandError,
     load_file_transfer_settings,
     load_password_rotation_settings,
+    open_ssh_client,
     rotate_routeros_user_password,
 )
+
+
+FAKE_HOST_KEY_BYTES = b"router-host-key"
+
+
+def fake_host_key_fingerprint() -> str:
+    digest = hashlib.sha256(FAKE_HOST_KEY_BYTES).digest()
+    return f"SHA256:{base64.b64encode(digest).decode('ascii').rstrip('=')}"
 
 
 def test_load_file_transfer_settings_uses_scp_overrides(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -23,6 +36,7 @@ def test_load_file_transfer_settings_uses_scp_overrides(monkeypatch: pytest.Monk
     monkeypatch.setenv("MIKROTIK_SCP_USER", "scp-user")
     monkeypatch.setenv("MIKROTIK_SCP_PASSWORD", "scp-pass")
     monkeypatch.delenv("MIKROTIK_SCP_PRIVATE_KEY", raising=False)
+    monkeypatch.setenv("MIKROTIK_SCP_HOST_FINGERPRINT_SHA256", fake_host_key_fingerprint())
     monkeypatch.setenv("MIKROTIK_SCP_PORT", "2222")
     monkeypatch.setenv("MIKROTIK_SCP_TIMEOUT", "12.5")
 
@@ -32,6 +46,7 @@ def test_load_file_transfer_settings_uses_scp_overrides(monkeypatch: pytest.Monk
     assert settings.username == "scp-user"
     assert settings.password == "scp-pass"
     assert settings.private_key is None
+    assert settings.ssh_host_fingerprint_sha256 == fake_host_key_fingerprint()
     assert settings.port == 2222
     assert settings.timeout == 12.5
 
@@ -45,6 +60,7 @@ def test_load_file_transfer_settings_falls_back_to_api_credentials(monkeypatch: 
     monkeypatch.delenv("MIKROTIK_SCP_PRIVATE_KEY", raising=False)
     monkeypatch.delenv("MIKROTIK_SCP_HOST", raising=False)
     monkeypatch.delenv("MIKROTIK_SCP_PORT", raising=False)
+    monkeypatch.setenv("MIKROTIK_SCP_HOST_FINGERPRINT_SHA256", fake_host_key_fingerprint())
 
     settings = load_file_transfer_settings("router.test")
 
@@ -63,6 +79,7 @@ def test_load_file_transfer_settings_uses_explicit_private_key(monkeypatch: pyte
     monkeypatch.setenv("MIKROTIK_SCP_PRIVATE_KEY", str(private_key))
     monkeypatch.setenv("MIKROTIK_SCP_KEY_PASSPHRASE", "phrase")
     monkeypatch.setenv("MIKROTIK_SCP_PASSWORD", "ignored-pass")
+    monkeypatch.setenv("MIKROTIK_SCP_HOST_FINGERPRINT_SHA256", fake_host_key_fingerprint())
 
     settings = load_file_transfer_settings("router.test")
 
@@ -80,6 +97,7 @@ def test_load_file_transfer_settings_does_not_use_default_router_key(monkeypatch
     monkeypatch.setenv("MIKROTIK_SCP_USER", "mcprw")
     monkeypatch.delenv("MIKROTIK_SCP_PRIVATE_KEY", raising=False)
     monkeypatch.setenv("MIKROTIK_SCP_PASSWORD", "scp-pass")
+    monkeypatch.setenv("MIKROTIK_SCP_HOST_FINGERPRINT_SHA256", fake_host_key_fingerprint())
 
     settings = load_file_transfer_settings("router.test")
 
@@ -94,6 +112,7 @@ def test_load_file_transfer_settings_requires_credentials(monkeypatch: pytest.Mo
     monkeypatch.delenv("MIKROTIK_PASSWORD", raising=False)
     monkeypatch.delenv("MIKROTIK_SCP_USER", raising=False)
     monkeypatch.delenv("MIKROTIK_SCP_PASSWORD", raising=False)
+    monkeypatch.setenv("MIKROTIK_SCP_HOST_FINGERPRINT_SHA256", fake_host_key_fingerprint())
     monkeypatch.setenv("MIKROTIK_SCP_PRIVATE_KEY", "/definitely/missing/key")
 
     with pytest.raises(RuntimeError, match="SCP private key file"):
@@ -106,9 +125,35 @@ def test_load_file_transfer_settings_requires_auth_when_no_key_or_password(monke
     monkeypatch.delenv("MIKROTIK_PASSWORD", raising=False)
     monkeypatch.setenv("MIKROTIK_SCP_USER", "mcprw")
     monkeypatch.delenv("MIKROTIK_SCP_PASSWORD", raising=False)
+    monkeypatch.setenv("MIKROTIK_SCP_HOST_FINGERPRINT_SHA256", fake_host_key_fingerprint())
     monkeypatch.setenv("MIKROTIK_SCP_PRIVATE_KEY", str(tmp_path / "missing-key"))
 
     with pytest.raises(RuntimeError, match="SCP private key file"):
+        load_file_transfer_settings("router.test")
+
+
+def test_load_file_transfer_settings_requires_host_key_fingerprint(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr("mikrotik_mcp.downloads.workspace_root", lambda: tmp_path)
+    monkeypatch.setenv("MIKROTIK_USER", "admin")
+    monkeypatch.setenv("MIKROTIK_PASSWORD", "secret")
+    monkeypatch.delenv("MIKROTIK_SCP_HOST_FINGERPRINT_SHA256", raising=False)
+
+    settings = load_file_transfer_settings("router.test")
+
+    assert settings.ssh_host_fingerprint_sha256 is None
+
+
+def test_load_file_transfer_settings_rejects_invalid_host_key_fingerprint(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr("mikrotik_mcp.downloads.workspace_root", lambda: tmp_path)
+    monkeypatch.setenv("MIKROTIK_USER", "admin")
+    monkeypatch.setenv("MIKROTIK_PASSWORD", "secret")
+    monkeypatch.setenv("MIKROTIK_SCP_HOST_FINGERPRINT_SHA256", "not-a-fingerprint")
+
+    with pytest.raises(ValueError, match="OpenSSH-style SHA256 fingerprint"):
         load_file_transfer_settings("router.test")
 
 
@@ -167,6 +212,7 @@ class FakeSSHClient:
         exec_stderr: bytes = b"",
         exec_exit_status: int = 0,
         sftp_client: FakeSFTPClient | None = None,
+        server_key_bytes: bytes = FAKE_HOST_KEY_BYTES,
     ) -> None:
         self.connected_to: tuple[str, int] | None = None
         self.connect_kwargs: dict[str, object] | None = None
@@ -179,6 +225,7 @@ class FakeSSHClient:
         self.exec_exit_status = exec_exit_status
         self.commands: list[tuple[str, float | None]] = []
         self.sftp_client = sftp_client or FakeSFTPClient()
+        self.server_key = FakeHostKey(server_key_bytes)
 
     def set_missing_host_key_policy(self, policy) -> None:
         self.policy = policy
@@ -186,6 +233,8 @@ class FakeSSHClient:
     def connect(self, **kwargs) -> None:
         if self.fail_on_connect:
             raise OSError("connect failed")
+        if self.policy is not None:
+            self.policy.missing_host_key(self, kwargs["hostname"], self.server_key)
         self.connected_to = (kwargs["hostname"], kwargs["port"])
         self.connect_kwargs = kwargs
 
@@ -220,6 +269,14 @@ class FakeExecStream:
         self.channel = FakeExecChannel(exit_status)
 
     def read(self) -> bytes:
+        return self.payload
+
+
+class FakeHostKey:
+    def __init__(self, payload: bytes) -> None:
+        self.payload = payload
+
+    def asbytes(self) -> bytes:
         return self.payload
 
 
@@ -322,10 +379,31 @@ def test_scp_file_downloader_prefers_private_key(monkeypatch: pytest.MonkeyPatch
     }
 
 
+def test_open_ssh_client_rejects_mismatched_host_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    ssh_client = FakeSSHClient(server_key_bytes=b"unexpected-host-key")
+    monkeypatch.setattr("mikrotik_mcp.downloads.paramiko.SSHClient", lambda: ssh_client)
+
+    with pytest.raises(paramiko.SSHException, match="SSH host key fingerprint mismatch"):
+        open_ssh_client(load_file_transfer_settings_for_test())
+
+
+def test_open_ssh_client_allows_missing_host_fingerprint(monkeypatch: pytest.MonkeyPatch) -> None:
+    ssh_client = FakeSSHClient()
+    monkeypatch.setattr("mikrotik_mcp.downloads.paramiko.SSHClient", lambda: ssh_client)
+
+    settings = load_file_transfer_settings_for_test()
+    settings.ssh_host_fingerprint_sha256 = None
+
+    open_ssh_client(settings)
+
+    assert isinstance(ssh_client.policy, PermissiveMissingHostKeyPolicy)
+
+
 def test_load_password_rotation_settings_requires_private_key(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr("mikrotik_mcp.downloads.workspace_root", lambda: tmp_path)
     monkeypatch.setenv("MIKROTIK_USER", "admin")
     monkeypatch.setenv("MIKROTIK_SCP_PASSWORD", "secret")
+    monkeypatch.setenv("MIKROTIK_SCP_HOST_FINGERPRINT_SHA256", fake_host_key_fingerprint())
     monkeypatch.delenv("MIKROTIK_SCP_PRIVATE_KEY", raising=False)
 
     with pytest.raises(RuntimeError, match="MIKROTIK_SCP_PRIVATE_KEY"):
@@ -340,6 +418,7 @@ def test_rotate_routeros_user_password_runs_routeros_command_over_ssh(monkeypatc
     monkeypatch.setattr("mikrotik_mcp.downloads.paramiko.SSHClient", lambda: ssh_client)
     monkeypatch.setenv("MIKROTIK_SCP_USER", "admin")
     monkeypatch.setenv("MIKROTIK_SCP_PRIVATE_KEY", str(private_key))
+    monkeypatch.setenv("MIKROTIK_SCP_HOST_FINGERPRINT_SHA256", fake_host_key_fingerprint())
     monkeypatch.setenv("MIKROTIK_SCP_TIMEOUT", "9")
 
     rotate_routeros_user_password(host="router.test", username="admin", new_password="A" * 32)
@@ -363,6 +442,7 @@ def test_rotate_routeros_user_password_wraps_remote_command_failures(monkeypatch
     monkeypatch.setattr("mikrotik_mcp.downloads.paramiko.SSHClient", lambda: ssh_client)
     monkeypatch.setenv("MIKROTIK_SCP_USER", "admin")
     monkeypatch.setenv("MIKROTIK_SCP_PRIVATE_KEY", str(private_key))
+    monkeypatch.setenv("MIKROTIK_SCP_HOST_FINGERPRINT_SHA256", fake_host_key_fingerprint())
 
     with pytest.raises(RouterSSHCommandError, match="permission denied"):
         rotate_routeros_user_password(host="router.test", username="admin", new_password="A" * 32)
@@ -378,6 +458,7 @@ def test_check_routeros_password_rotation_ready_runs_harmless_user_probe(monkeyp
     monkeypatch.setattr("mikrotik_mcp.downloads.paramiko.SSHClient", lambda: ssh_client)
     monkeypatch.setenv("MIKROTIK_SCP_USER", "admin")
     monkeypatch.setenv("MIKROTIK_SCP_PRIVATE_KEY", str(private_key))
+    monkeypatch.setenv("MIKROTIK_SCP_HOST_FINGERPRINT_SHA256", fake_host_key_fingerprint())
 
     result = check_routeros_password_rotation_ready(host="router.test", username="admin")
 
@@ -400,6 +481,7 @@ def test_check_routeros_password_rotation_ready_rejects_missing_target_user(monk
     monkeypatch.setattr("mikrotik_mcp.downloads.paramiko.SSHClient", lambda: ssh_client)
     monkeypatch.setenv("MIKROTIK_SCP_USER", "admin")
     monkeypatch.setenv("MIKROTIK_SCP_PRIVATE_KEY", str(private_key))
+    monkeypatch.setenv("MIKROTIK_SCP_HOST_FINGERPRINT_SHA256", fake_host_key_fingerprint())
 
     with pytest.raises(RouterSSHCommandError, match="was not found over SSH"):
         check_routeros_password_rotation_ready(host="router.test", username="admin")
@@ -412,6 +494,7 @@ def load_file_transfer_settings_for_test():
         password = "secret"
         private_key = None
         key_passphrase = None
+        ssh_host_fingerprint_sha256 = fake_host_key_fingerprint()
         port = 22
         timeout = 5.0
 
@@ -425,6 +508,7 @@ def load_key_transfer_settings_for_test():
         password = "secret"
         private_key = "/workspace/certs/router-key"
         key_passphrase = "phrase"
+        ssh_host_fingerprint_sha256 = fake_host_key_fingerprint()
         port = 22
         timeout = 5.0
 

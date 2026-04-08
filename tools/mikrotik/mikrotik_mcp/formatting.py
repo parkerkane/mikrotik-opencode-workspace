@@ -171,7 +171,9 @@ def format_healthcheck_result(record: dict[str, Any]) -> CallToolResult:
     certificate = api.get("certificate") if isinstance(api.get("certificate"), dict) else {}
     config = record.get("config") if isinstance(record.get("config"), dict) else {}
     scp_probe = scp.get("probe") if isinstance(scp.get("probe"), dict) else {}
+    scp_server_identity = scp.get("server_identity") if isinstance(scp.get("server_identity"), dict) else {}
     passwordless_probe = passwordless.get("probe") if isinstance(passwordless.get("probe"), dict) else {}
+    diagnosis = _healthcheck_diagnosis(record)
 
     display_record = {
         "success": record.get("success"),
@@ -200,6 +202,10 @@ def format_healthcheck_result(record: dict[str, Any]) -> CallToolResult:
         "scp-probe": scp_probe.get("operation"),
         "scp-working-directory": scp_probe.get("working_directory"),
         "scp-listing-count": scp_probe.get("listing_count"),
+        "scp-server-identity-status": scp_server_identity.get("status"),
+        "scp-server-key-type": scp_server_identity.get("key_type"),
+        "scp-server-fingerprint-sha256": scp_server_identity.get("fingerprint_sha256"),
+        "scp-server-identity-message": scp_server_identity.get("message"),
         "passwordless-status": passwordless.get("status") or ("ok" if passwordless.get("ok") else "failed"),
         "passwordless-code": passwordless.get("code"),
         "passwordless-message": passwordless.get("message"),
@@ -213,12 +219,13 @@ def format_healthcheck_result(record: dict[str, Any]) -> CallToolResult:
         "config-scp-credentials": config.get("scp_credentials_configured"),
         "config-scp-auth-mode": config.get("scp_auth_mode"),
         "config-scp-key-path": config.get("scp_key_path"),
+        "config-scp-host-fingerprint-warning": config.get("scp_host_fingerprint_warning"),
         "config-scp-host-override": config.get("scp_host_override"),
         "config-resolved-scp-host": config.get("resolved_host"),
     }
     lines = [
         f"Healthcheck: {_display_value(record.get('status'))}",
-        "",
+        *([f"Likely issue: {diagnosis}", ""] if diagnosis else [""]),
         *_render_key_value_table(
             display_record,
             preferred_fields=(
@@ -248,6 +255,10 @@ def format_healthcheck_result(record: dict[str, Any]) -> CallToolResult:
                 "scp-probe",
                 "scp-working-directory",
                 "scp-listing-count",
+                "scp-server-identity-status",
+                "scp-server-key-type",
+                "scp-server-fingerprint-sha256",
+                "scp-server-identity-message",
                 "passwordless-status",
                 "passwordless-code",
                 "passwordless-message",
@@ -261,6 +272,7 @@ def format_healthcheck_result(record: dict[str, Any]) -> CallToolResult:
                 "config-scp-credentials",
                 "config-scp-auth-mode",
                 "config-scp-key-path",
+                "config-scp-host-fingerprint-warning",
                 "config-scp-host-override",
                 "config-resolved-scp-host",
             ),
@@ -270,6 +282,42 @@ def format_healthcheck_result(record: dict[str, Any]) -> CallToolResult:
         content=[TextContent(type="text", text="\n".join(lines))],
         structuredContent=record,
     )
+
+
+def _healthcheck_diagnosis(record: dict[str, Any]) -> str | None:
+    api = record.get("api") if isinstance(record.get("api"), dict) else {}
+    scp = record.get("scp") if isinstance(record.get("scp"), dict) else {}
+    passwordless = record.get("passwordless") if isinstance(record.get("passwordless"), dict) else {}
+    config = record.get("config") if isinstance(record.get("config"), dict) else {}
+    scp_server_identity = scp.get("server_identity") if isinstance(scp.get("server_identity"), dict) else {}
+
+    server_fingerprint = scp_server_identity.get("fingerprint_sha256")
+    if passwordless.get("code") == "passwordless.fingerprint_missing":
+        details = "Set MIKROTIK_SCP_HOST_FINGERPRINT_SHA256"
+        if server_fingerprint:
+            details += f" to {server_fingerprint}"
+        if api.get("code") == "api.auth_failed":
+            return f"SSH host fingerprint verification is not configured, so startup password rotation was skipped and API login is using an invalid or empty password. {details}."
+        return f"SSH host fingerprint verification is not configured. {details}."
+
+    scp_message = str(scp.get("message") or "")
+    if "fingerprint mismatch" in scp_message.lower():
+        details = "The configured MIKROTIK_SCP_HOST_FINGERPRINT_SHA256 does not match the server"
+        if server_fingerprint:
+            details += f"; server fingerprint is {server_fingerprint}"
+        return details + "."
+
+    warning = config.get("scp_host_fingerprint_warning")
+    if warning and not scp.get("ok"):
+        details = str(warning)
+        if server_fingerprint:
+            details += f"; server fingerprint is {server_fingerprint}"
+        return details + "."
+
+    if passwordless.get("code") == "passwordless.startup_failed":
+        return str(passwordless.get("message") or "Startup password rotation failed")
+
+    return None
 
 
 def format_tool_ping_result(address: str, items: list[dict[str, Any]]) -> CallToolResult:
