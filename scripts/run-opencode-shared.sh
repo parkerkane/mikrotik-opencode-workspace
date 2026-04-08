@@ -22,7 +22,7 @@ if [[ ! -f "$HOST_AUTH_FILE" ]]; then
     exit 1
 fi
 
-docker build --quiet -t "$IMAGE_NAME" "$REPO_ROOT" >/dev/null
+docker build -t "$IMAGE_NAME" "$REPO_ROOT" >/dev/null
 
 if [[ $# -gt 0 ]]; then
     COMMAND=("$@")

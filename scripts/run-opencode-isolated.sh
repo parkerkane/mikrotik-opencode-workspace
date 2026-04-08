@@ -11,7 +11,7 @@ DATA_VOLUME=${OPENCODE_ISOLATED_DATA_VOLUME:-mikrotik-manager-opencode-isolated-
 STATE_VOLUME=${OPENCODE_ISOLATED_STATE_VOLUME:-mikrotik-manager-opencode-isolated-state}
 CACHE_VOLUME=${OPENCODE_ISOLATED_CACHE_VOLUME:-mikrotik-manager-opencode-isolated-cache}
 
-docker build --quiet -t "$IMAGE_NAME" "$REPO_ROOT" >/dev/null
+docker build -t "$IMAGE_NAME" "$REPO_ROOT" >/dev/null
 
 if [[ $# -gt 0 ]]; then
     COMMAND=("$@")
