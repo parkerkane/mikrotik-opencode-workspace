@@ -212,6 +212,60 @@ Note: `opencode.json` currently targets `router.local`. If that hostname does no
 
 The Docker wrappers use the `mikrotik-manager-opencode` image name and `mikrotik-manager-opencode-*` Docker volume names by default.
 
+## Run Claude Code In Docker
+
+These wrappers run Claude Code inside a hardened container while keeping the workspace mounted at `/workspace` so the same local MCP server can be used from Claude's own MCP configuration.
+
+Builds are automatic on each run:
+
+```bash
+scripts/run-claude-shared.sh
+scripts/run-claude-isolated.sh
+```
+
+Shared credentials mode:
+- Reuses host Claude Code config from `~/.claude`
+- Reuses host Claude Code state from `~/.claude.json`
+- Keeps other container Claude runtime state in a Docker named home volume
+
+Fully isolated mode:
+- Does not reuse any host Claude Code config
+- Stores config, auth, logs, cache, and Claude session state in a Docker named home volume
+
+Both wrappers:
+- mount this repo at `/workspace`
+- start from `/workspace`
+- run with `--cap-drop=ALL` and `--security-opt no-new-privileges:true`
+- disable Git credential prompting so authenticated `git push` stays a host-side action unless you explicitly add Git credentials to the container
+
+Pass a custom command instead of the default `claude` if needed:
+
+```bash
+scripts/run-claude-shared.sh claude --version
+scripts/run-claude-isolated.sh bash
+```
+
+Reset Docker volumes created by the Claude wrappers:
+
+```bash
+scripts/reset-claude-docker-volumes.sh
+```
+
+Note: Claude Code uses its own MCP client configuration format, but the server command stays the same:
+
+```bash
+python tools/mikrotik/main.py <router-host>
+```
+
+The Claude Docker wrappers use the `mikrotik-manager-claude` image name and `mikrotik-manager-claude-*` Docker volume names by default.
+This is what preserves Claude login state across container restarts.
+
+Claude Code MCP config files in this repo:
+- `.mcp.json`: local project-scoped Claude Code MCP config at the repo root
+- `docs/claude.local.example.json`: example local-scope `~/.claude.json` entry for personal setup
+
+The shared `.mcp.json` uses `MIKROTIK_HOST` when set and otherwise falls back to `router.local`.
+
 ## Testing
 
 ```bash

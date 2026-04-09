@@ -1,0 +1,16 @@
+{
+  "projects": {
+    "/path/to/your/project": {
+      "mcpServers": {
+        "mikrotik": {
+          "command": "python",
+          "args": [
+            "tools/mikrotik/main.py",
+            "${MIKROTIK_HOST:-router.local}"
+          ],
+          "env": {}
+        }
+      }
+    }
+  }
+}

@@ -56,16 +56,21 @@ COPY requirements.txt /tmp/requirements.txt
 RUN python3 -m venv "$VIRTUAL_ENV" \
     && "$VIRTUAL_ENV/bin/pip" install --no-cache-dir --upgrade pip \
     && "$VIRTUAL_ENV/bin/pip" install --no-cache-dir -r /tmp/requirements.txt \
-    && npm install -g opencode-ai \
+    && npm install -g opencode-ai @anthropic-ai/claude-code \
     && rm -f /tmp/requirements.txt
 
 RUN mkdir -p \
         /workspace \
         /tmp \
         /home/node/.cache/opencode \
+        /home/node/.cache/claude \
         /home/node/.config/opencode \
         /home/node/.local/share/opencode \
+        /home/node/.local/share/claude \
         /home/node/.local/state/opencode \
+        /home/node/.local/state/claude \
+        /home/node/.claude \
+        /home/node/claude-home \
     && chown -R 1000:1000 /workspace /tmp /home/node
 
 USER 1000:1000

@@ -7,6 +7,7 @@ Shared durable project context intended to be safe to keep in git.
 
 ## Entry Points
 - OpenCode/MCP entry script: `tools/mikrotik/main.py`
+- Claude Code project MCP config: `.mcp.json`
 - Server wiring: `tools/mikrotik/mikrotik_mcp/server.py`
 - RouterOS client logic: `tools/mikrotik/mikrotik_mcp/client.py`
 
