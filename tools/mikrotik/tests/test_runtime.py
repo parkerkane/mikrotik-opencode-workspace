@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import runpy
+
 import pytest
 from mikrotik_mcp import runtime
 
@@ -128,3 +130,13 @@ def test_rotate_startup_api_password_rejects_invalid_length(monkeypatch) -> None
 
     with pytest.raises(RuntimeError, match="at least 1"):
         runtime.rotate_startup_api_password("router.test", username="admin")
+
+
+def test_module_entrypoint_delegates_to_runtime_main(monkeypatch) -> None:
+    seen: list[list[str] | None] = []
+
+    monkeypatch.setattr(runtime, "main", lambda argv=None: seen.append(argv))
+
+    runpy.run_module("mikrotik_mcp", run_name="__main__")
+
+    assert seen == [None]

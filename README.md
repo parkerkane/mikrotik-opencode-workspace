@@ -29,9 +29,9 @@ Licensed under the Apache License, Version 2.0. See `LICENSE`.
 
 - Python 3.11+
 - RouterOS API enabled on the target router
-- workspace-root `.env` with startup auth settings
+- current-working-directory `.env` fallback for manual startup auth settings
 
-Use `.env.example` as the starting point for your local `.env`.
+Use `.env.example` as the starting point for a local fallback `.env` when not launching through OpenCode-managed environment variables.
 
 For passwordless startup setup and behavior, see `docs/passwordless-startup.md`.
 
@@ -98,9 +98,10 @@ Passwordless mode needs `MIKROTIK_USER`, `MIKROTIK_API_PASSWORDLESS_ENABLED=true
 | `MIKROTIK_SCP_TIMEOUT` | optional | optional | `30.0` | SSH/SFTP timeout in seconds |
 
 Notes:
-- `.env` is loaded from the repository root.
+- OpenCode `environment` entries are the primary runtime configuration source.
+- `.env` is an optional fallback for manual runs and is loaded from the current working directory.
 - TLS is enabled by default.
-- When `certs/` exists, `.pem`, `.crt`, and `.cer` files in it are loaded into the TLS trust store except names ending with `.disabled`.
+- When `certs/` exists under the current working directory, `.pem`, `.crt`, and `.cer` files in it are loaded into the TLS trust store except names ending with `.disabled`.
 - `certs/` is for local PEM CA certificates only; only `certs/README.md` is tracked by git.
 - SSH/SCP host fingerprint verification is enabled when `MIKROTIK_SCP_HOST_FINGERPRINT_SHA256` is set; mismatches are rejected.
 - If `MIKROTIK_SCP_HOST_FINGERPRINT_SHA256` is unset, generic SSH/SCP health probes still work without verification and healthcheck warns that verification is disabled.
@@ -144,6 +145,12 @@ Create or activate a Python environment, then install dependencies from the repo
 pip install -r requirements.txt
 ```
 
+Or install the package directly from GitHub:
+
+```bash
+pip install "git+https://github.com/parkerkane/mikrotik-manager.git#subdirectory=tools/mikrotik"
+```
+
 Packaging metadata for publishing is defined in `tools/mikrotik/pyproject.toml` and uses the Apache-2.0 license.
 
 ## Run The MCP Server
@@ -152,6 +159,12 @@ From the repository root:
 
 ```bash
 python tools/mikrotik/main.py <router-host>
+```
+
+Installed module usage:
+
+```bash
+python -m mikrotik_mcp <router-host>
 ```
 
 The host argument is required.

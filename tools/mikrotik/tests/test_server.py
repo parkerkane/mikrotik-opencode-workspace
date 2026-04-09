@@ -81,9 +81,6 @@ from mikrotik_mcp.server import (
 )
 
 
-WORKSPACE_ROOT = Path(__file__).resolve().parents[4]
-
-
 class RecordingDownloader:
     def __init__(self, *, fail_on_call: int | None = None) -> None:
         self.fail_on_call = fail_on_call
@@ -2189,7 +2186,9 @@ def test_file_download_defaults_to_local_backups_directory(tmp_path: Path, monke
     assert downloader.calls == [(router_path, local_path)]
 
 
-def test_file_download_resolves_relative_local_path_from_workspace_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_file_download_resolves_relative_local_path_from_current_working_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     client = Mock(host="router.test")
     downloader = RecordingDownloader()
     monkeypatch.setattr(file_tool_impls, "workspace_root", lambda: tmp_path)
@@ -2264,7 +2263,7 @@ def test_system_backup_collect_creates_and_downloads_both_artifacts(tmp_path: Pa
     )
 
 
-def test_system_backup_collect_resolves_relative_local_dir_from_workspace_root(
+def test_system_backup_collect_resolves_relative_local_dir_from_current_working_directory(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     client = Mock(host="router.test")

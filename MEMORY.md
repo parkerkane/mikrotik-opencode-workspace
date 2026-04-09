@@ -12,7 +12,7 @@ Shared durable project context intended to be safe to keep in git.
 
 ## Runtime Gotchas
 - `main.py` requires router host arg: `python tools/mikrotik/main.py <host>`.
-- Startup loads `.env` from the workspace root.
+- Startup reads `MIKROTIK_*` from the process environment first; `.env` is an optional fallback loaded from the current working directory.
 - Default startup env vars: `MIKROTIK_USER`, `MIKROTIK_PASSWORD`.
 - `MIKROTIK_API_PASSWORDLESS_ENABLED=true` switches startup to SSH key-based API password rotation and no longer requires `MIKROTIK_PASSWORD`.
 - Passwordless startup rotation requires `MIKROTIK_SCP_PRIVATE_KEY` and reuses the existing `MIKROTIK_SCP_*` SSH settings.
@@ -25,8 +25,8 @@ Shared durable project context intended to be safe to keep in git.
 
 ## Operations
 - "create backup" or "create and download backup" maps to `system_backup_collect` with `name_prefix="backup"` unless the user specifies otherwise.
-- Default local backup destination: workspace-root `backups/`.
-- Default local destination for downloaded router files: workspace-root `exports/`, except backup artifacts which stay in `backups/`.
+- Default local backup destination: current-working-directory `backups/`.
+- Default local destination for downloaded router files: current-working-directory `exports/`, except backup artifacts which stay in `backups/`.
 
 ## RouterOS Notes
 - `www-ssl` requires an explicit certificate binding before browser HTTPS works.

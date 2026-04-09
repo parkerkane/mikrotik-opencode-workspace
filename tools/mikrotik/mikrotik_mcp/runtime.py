@@ -149,7 +149,7 @@ def generate_api_password(length: int) -> str:
 def main(argv: list[str] | None = None) -> None:
     args = argv if argv is not None else sys.argv[1:]
     if not args:
-        raise SystemExit("Usage: python tools/mikrotik/main.py <host>")
+        raise SystemExit("Usage: python -m mikrotik_mcp <host>")
 
     client = load_settings(args[0])
     try:

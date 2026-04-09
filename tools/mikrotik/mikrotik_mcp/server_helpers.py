@@ -22,7 +22,7 @@ from .client import RouterOSClient
 
 
 def workspace_root() -> Path:
-    return Path(__file__).resolve().parents[3]
+    return Path.cwd()
 
 
 def stringify_value(value: Any) -> str:
