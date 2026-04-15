@@ -37,6 +37,9 @@ Shared durable project context intended to be safe to keep in git.
 - `/ip/ssh password-authentication=yes-if-no-key` can break password-based SCP even when `/ip/service ssh` remains enabled.
 - Router `/system/script` entries should have concise English comments describing the operational purpose in sentence case.
 - On this router, `/interface/wifi/registration-table` exposes current client rates and uptime but not usable per-client byte totals, and `/ip/accounting` is unavailable.
+- RouterOS `dst-port` match values accept at most 15 comma-separated elements per rule; larger bait-port sets must be split across multiple equivalent rules.
+- WAN honeypot policy on this router uses staged address-lists `honeypot_stage1` `15m`, `honeypot_stage2` `1d`, `honeypot_block` `7d`, with `raw prerouting` drop for `honeypot_block`, TCP bait ports only, bait list split across multiple rules covering `21,22,23,25,53,80,110,443,445,1433,1723,3389,5060,5061,5800,5900,8080,8291,8728,8729,10000,1337,16993,44443`, and medium-annoyance IPv4 tarpit on `honeypot_stage1` and `honeypot_stage2` for new TCP bait-port hits with `limit=10,5:packet` before final WAN drop.
+- IPv6 WAN honeypot policy matches IPv4 staged behavior with `honeypot6_stage1` `15m`, `honeypot6_stage2` `1d`, `honeypot6_block` `7d`, `raw prerouting` drop for `honeypot6_block`, TCP bait ports only, no ICMPv6 trapping, and same split bait-port set as IPv4.
 
 ## Testing
 - `pytest` is configured with `--disable-socket` in root `pytest.ini`; default tests must stay fully mocked.
